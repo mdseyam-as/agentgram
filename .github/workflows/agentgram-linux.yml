@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: linux-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
 
   linux:
