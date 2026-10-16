@@ -122,6 +122,22 @@ PRIVATE
 
     api/api_attached_stickers.cpp
     api/api_attached_stickers.h
+    ai_agent/ai_agent_config.cpp
+    ai_agent/ai_agent_config.h
+    ai_agent/ai_agent_llm.cpp
+    ai_agent/ai_agent_llm.h
+    ai_agent/ai_agent_manager.cpp
+    ai_agent/ai_agent_manager.h
+    ai_agent/ai_agent_markdown.cpp
+    ai_agent/ai_agent_markdown.h
+    ai_agent/ai_agent_oauth.cpp
+    ai_agent/ai_agent_oauth.h
+    ai_agent/ai_agent_panel.cpp
+    ai_agent/ai_agent_panel.h
+    ai_agent/ai_agent_settings_box.cpp
+    ai_agent/ai_agent_settings_box.h
+    ai_agent/ai_agent_tools.cpp
+    ai_agent/ai_agent_tools.h
     api/api_authorizations.cpp
     api/api_authorizations.h
     api/api_blocked_peers.cpp
@@ -576,6 +592,8 @@ PRIVATE
     core/core_settings_proxy.h
     core/crash_report_window.cpp
     core/crash_report_window.h
+    core/api_credentials.cpp
+    core/api_credentials.h
     core/crash_reports.cpp
     core/crash_reports.h
     core/credits_amount.h

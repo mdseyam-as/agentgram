@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_top_bar_widget.h"
 
+#include "ai_agent/ai_agent_panel.h"
 #include "history/history.h"
 #include "history/view/history_view_send_action.h"
 #include "boxes/add_contact_box.h"
@@ -69,6 +70,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_dialogs.h"
 #include "styles/style_chat.h"
 #include "styles/style_info.h"
+#include "styles/style_ai_agent.h"
 
 #include <QtGui/QWindow>
 
@@ -127,6 +129,7 @@ TopBarWidget::TopBarWidget(
 , _groupCall(this, st::topBarGroupCall)
 , _search(this, st::topBarSearch)
 , _infoToggle(this, st::topBarInfo)
+, _aiAgent(this, st::aiAgentTopBarButton)
 , _menuToggle(this, st::topBarMenuToggle)
 , _titlePeerText(st::windowMinWidth / 3)
 , _onlineUpdater([=] { updateOnlineDisplay(); }) {
@@ -160,6 +163,15 @@ TopBarWidget::TopBarWidget(
 	_menuToggle->addClickHandler([=](auto) { showPeerMenu(); });
 	_menuToggle->setAcceptBoth(true, true);
 	_infoToggle->setClickedCallback([=] { toggleInfoSection(); });
+	_aiAgent->setClickedCallback([=] { AiAgent::TogglePanel(_controller); });
+	_aiAgent->setAccessibleName(u"ИИ-агент"_q);
+	AiAgent::PanelShownValue(
+		_controller
+	) | rpl::on_next([=](bool shown) {
+		_aiAgent->setIconOverride(
+			shown ? &st::aiAgentTopBarButtonActive : nullptr,
+			shown ? &st::aiAgentTopBarButtonActive : nullptr);
+	}, _aiAgent->lifetime());
 	_back->setAcceptBoth();
 	_back->addClickHandler([=](Qt::MouseButton) {
 		InvokeQueued(_back.data(), [=] { backClicked(); });
@@ -1288,6 +1300,10 @@ void TopBarWidget::updateControlsGeometry() {
 	} else {
 		_rightTaken += _menuToggle->width() + st::topBarSkip;
 	}
+	_aiAgent->moveToRight(_rightTaken, otherButtonsTop);
+	if (!_aiAgent->isHidden()) {
+		_rightTaken += _aiAgent->width();
+	}
 	_infoToggle->moveToRight(_rightTaken, otherButtonsTop);
 	if (!_infoToggle->isHidden()) {
 		_infoToggle->moveToRight(_rightTaken, otherButtonsTop);
@@ -1408,6 +1424,8 @@ void TopBarWidget::updateControlsVisibility() {
 		&& !_chooseForReportReason
 		&& (_narrowRatio < 1.
 			|| (rootChatsListBar() && _activeChat.key.folder())));
+	_aiAgent->setVisible(!_chooseForReportReason
+		&& (_activeChat.key.peer() != nullptr));
 	_infoToggle->setVisible(hasInfo
 		&& !isOneColumn
 		&& _controller->canShowThirdSection()

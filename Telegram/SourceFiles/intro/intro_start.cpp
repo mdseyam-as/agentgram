@@ -7,6 +7,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "intro/intro_start.h"
 
+#include "ai_agent/ai_agent_settings_box.h"
+#include "core/api_credentials.h"
+#include "boxes/abstract_box.h"
+#include "ui/layers/generic_box.h"
+
 #include "lang/lang_keys.h"
 #include "intro/intro_qr.h"
 #include "intro/intro_phone.h"
@@ -24,8 +29,23 @@ StartWidget::StartWidget(
 	not_null<Data*> data)
 : Step(parent, account, data, true) {
 	setMouseTracking(true);
-	setTitleText(rpl::single(u"Telegram Desktop"_q));
-	setDescriptionText(tr::lng_intro_about());
+	setTitleText(rpl::single(u"Agentgram"_q));
+	setDescriptionText(rpl::single(
+		u"Telegram с встроенным ИИ-агентом.\n"
+		"Неофициальный клиент на основе Telegram Desktop."_q));
+	const auto api = Ui::CreateChild<Ui::LinkButton>(
+		this,
+		Core::UsingCustomApiCredentials()
+			? u"Свой api_id: %1"_q.arg(Core::CurrentApiCredentials().id)
+			: u"Указать свой api_id Telegram"_q);
+	api->setClickedCallback([] {
+		Ui::show(Box(AiAgent::ApiCredentialsBox));
+	});
+	sizeValue() | rpl::on_next([=](QSize size) {
+		api->moveToLeft(
+			(size.width() - api->width()) / 2,
+			size.height() - api->height() * 3);
+	}, api->lifetime());
 	show();
 }
 

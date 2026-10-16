@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "window/window_main_menu.h"
 
+#include "ai_agent/ai_agent_panel.h"
 #include "apiwrap.h"
 #include "base/event_filter.h"
 #include "base/qt_signal_producer.h"
@@ -71,6 +72,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_main_menu_helpers.h"
 #include "window/window_peer_menu.h"
 #include "window/window_session_controller.h"
+#include "styles/style_ai_agent.h"
 #include "styles/style_chat.h" // popupMenuExpandedSeparator
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
@@ -767,6 +769,13 @@ void MainMenu::setupMenu() {
 			_controller->session().supportTemplates().reload();
 		});
 	}
+	addAction(
+		rpl::single(u"ИИ-агент"_q),
+		{ &st::aiAgentMenuIcon }
+	)->setClickedCallback([=] {
+		controller->window().hideSettingsAndLayer();
+		AiAgent::ShowPanel(controller);
+	});
 	addAction(
 		tr::lng_menu_settings(),
 		{ &st::menuIconSettings }

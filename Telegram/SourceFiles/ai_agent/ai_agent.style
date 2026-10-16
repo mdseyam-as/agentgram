@@ -1,0 +1,265 @@
+/*
+This file is part of Agentgram, a fork of Telegram Desktop.
+
+For license and copyright information please follow this link:
+https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+*/
+using "ui/basic.style";
+using "ui/widgets/widgets.style";
+using "ui/layers/layers.style";
+using "boxes/boxes.style";
+using "info/info.style";
+
+aiAgentPanelWidth: 400px;
+aiAgentPanelBg: windowBg;
+aiAgentAccent: windowBgActive;
+aiAgentAccentFg: windowFgActive;
+
+aiAgentHeaderHeight: 56px;
+aiAgentHeaderPadding: margins(14px, 0px, 6px, 0px);
+aiAgentAvatarSize: 36px;
+aiAgentAvatarIcon: icon {{ "agent/sparkle-22x22", windowFgActive }};
+aiAgentTitle: FlatLabel(defaultFlatLabel) {
+	textFg: windowBoldFg;
+	style: TextStyle(semiboldTextStyle) {
+		font: font(14px semibold);
+	}
+}
+aiAgentSubtitle: FlatLabel(defaultFlatLabel) {
+	textFg: windowSubTextFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(12px);
+	}
+}
+aiAgentSubtitleOver: windowActiveTextFg;
+aiAgentTitleLeft: 10px;
+aiAgentTitleTop: 9px;
+aiAgentSubtitleTop: 29px;
+
+aiAgentHeaderButton: IconButton(defaultIconButton) {
+	width: 40px;
+	height: 40px;
+	icon: icon {{ "box_button_close", boxTitleCloseFg }};
+	iconOver: icon {{ "box_button_close", boxTitleCloseFgOver }};
+	rippleAreaPosition: point(4px, 4px);
+	rippleAreaSize: 32px;
+	ripple: defaultRippleAnimationBgOver;
+}
+aiAgentClose: IconButton(aiAgentHeaderButton) {
+}
+aiAgentSettings: IconButton(aiAgentHeaderButton) {
+	icon: icon {{ "menu/settings", boxTitleCloseFg }};
+	iconOver: icon {{ "menu/settings", boxTitleCloseFgOver }};
+}
+aiAgentNewChat: IconButton(aiAgentHeaderButton) {
+	icon: icon {{ "agent/new_chat-20x20", boxTitleCloseFg }};
+	iconOver: icon {{ "agent/new_chat-20x20", boxTitleCloseFgOver }};
+}
+aiAgentPopout: IconButton(aiAgentHeaderButton) {
+	icon: icon {{ "agent/popout-20x20", boxTitleCloseFg }};
+	iconOver: icon {{ "agent/popout-20x20", boxTitleCloseFgOver }};
+}
+aiAgentThemeNight: IconButton(aiAgentHeaderButton) {
+	icon: icon {{ "menu/header_mode_night", boxTitleCloseFg }};
+	iconOver: icon {{ "menu/header_mode_night", boxTitleCloseFgOver }};
+}
+aiAgentThemeDay: IconButton(aiAgentHeaderButton) {
+	icon: icon {{ "menu/header_mode_day", boxTitleCloseFg }};
+	iconOver: icon {{ "menu/header_mode_day", boxTitleCloseFgOver }};
+}
+
+aiAgentListPadding: margins(12px, 12px, 12px, 12px);
+aiAgentEntrySkip: 10px;
+aiAgentBubbleRadius: 16px;
+aiAgentBubblePadding: margins(14px, 9px, 14px, 10px);
+aiAgentUserBubbleBg: windowBgActive;
+aiAgentUserBubbleFg: windowFgActive;
+aiAgentUserMaxWidthPercent: 85;
+aiAgentAssistantBg: windowBgOver;
+aiAgentAssistantFg: windowFg;
+aiAgentMessageText: FlatLabel(defaultFlatLabel) {
+	minWidth: 20px;
+	textFg: windowFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(13px);
+	}
+}
+aiAgentUserText: FlatLabel(aiAgentMessageText) {
+	textFg: windowFgActive;
+	palette: TextPalette(defaultTextPalette) {
+		linkFg: windowFgActive;
+		selectBg: activeButtonBgRipple;
+	}
+}
+aiAgentErrorBg: windowBgOver;
+aiAgentErrorText: FlatLabel(aiAgentMessageText) {
+	textFg: attentionButtonFg;
+}
+
+aiAgentToolPadding: margins(12px, 8px, 12px, 8px);
+aiAgentToolRadius: 12px;
+aiAgentToolBorder: 1px;
+aiAgentToolBorderFg: shadowFg;
+aiAgentToolConfirmBorderFg: windowBgActive;
+aiAgentToolIconSize: 18px;
+aiAgentToolIconSkip: 8px;
+aiAgentToolTitle: FlatLabel(defaultFlatLabel) {
+	minWidth: 20px;
+	textFg: windowSubTextFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(12px);
+	}
+}
+aiAgentToolTitleConfirm: FlatLabel(aiAgentToolTitle) {
+	textFg: windowBoldFg;
+	style: TextStyle(semiboldTextStyle) {
+		font: font(13px semibold);
+	}
+}
+aiAgentToolDetails: FlatLabel(aiAgentMessageText) {
+	textFg: windowFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(12px);
+	}
+}
+aiAgentToolDetailsSkip: 6px;
+aiAgentToolDoneFg: windowActiveTextFg;
+aiAgentToolFailFg: attentionButtonFg;
+aiAgentToolButtonsSkip: 10px;
+aiAgentApproveButton: RoundButton(defaultActiveButton) {
+	height: 30px;
+	textTop: 6px;
+	width: -24px;
+	radius: 15px;
+}
+aiAgentRejectButton: RoundButton(defaultLightButton) {
+	height: 30px;
+	textTop: 6px;
+	width: -24px;
+	radius: 15px;
+}
+aiAgentButtonSkip: 8px;
+aiAgentAlwaysAllow: defaultLinkButton;
+
+aiAgentEmptyIconSize: 64px;
+aiAgentEmptyIcon: icon {{ "agent/sparkle-36x36", windowFgActive }};
+aiAgentEmptyTop: 36px;
+aiAgentEmptyTitle: FlatLabel(defaultFlatLabel) {
+	align: align(top);
+	textFg: windowBoldFg;
+	style: TextStyle(semiboldTextStyle) {
+		font: font(17px semibold);
+	}
+}
+aiAgentEmptyText: FlatLabel(defaultFlatLabel) {
+	align: align(top);
+	minWidth: 200px;
+	textFg: windowSubTextFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(13px);
+	}
+}
+aiAgentEmptyTitleSkip: 14px;
+aiAgentEmptyTextSkip: 6px;
+aiAgentSuggestionsSkip: 22px;
+aiAgentSuggestion: RoundButton(defaultLightButton) {
+	height: 34px;
+	textTop: 8px;
+	width: -28px;
+	radius: 17px;
+	style: TextStyle(defaultTextStyle) {
+		font: font(13px);
+	}
+}
+aiAgentSuggestionSkip: 8px;
+
+aiAgentComposerPadding: margins(12px, 10px, 10px, 10px);
+aiAgentComposerRadius: 20px;
+aiAgentComposerBg: windowBgOver;
+aiAgentField: InputField(defaultInputField) {
+	textBg: transparent;
+	textBgActive: transparent;
+	textMargins: margins(14px, 12px, 6px, 12px);
+	placeholderFg: placeholderFg;
+	placeholderFgActive: placeholderFgActive;
+	placeholderFgError: placeholderFgActive;
+	placeholderMargins: margins(0px, 0px, 0px, 0px);
+	placeholderScale: 0.;
+	placeholderFont: font(13px);
+	border: 0px;
+	borderActive: 0px;
+	heightMin: 44px;
+	heightMax: 180px;
+	style: TextStyle(defaultTextStyle) {
+		font: font(13px);
+	}
+}
+aiAgentSendSize: 36px;
+aiAgentSendSkip: 4px;
+aiAgentSendIcon: icon {{ "agent/send-22x22", windowFgActive }};
+aiAgentStopIcon: icon {{ "agent/stop-22x22", windowFgActive }};
+aiAgentSendDisabledBg: windowSubTextFg;
+aiAgentHint: FlatLabel(defaultFlatLabel) {
+	textFg: windowSubTextFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(11px);
+	}
+}
+aiAgentHintTop: 6px;
+
+aiAgentTopBarButton: IconButton(topBarSearch) {
+	icon: icon {{ "agent/sparkle-22x22", menuIconFg }};
+	iconOver: icon {{ "agent/sparkle-22x22", menuIconFgOver }};
+	iconPosition: point(-1px, -1px);
+}
+aiAgentTopBarButtonActive: icon {{ "agent/sparkle-22x22", windowBgActive }};
+aiAgentMenuIcon: icon {{ "agent/sparkle-22x22", menuIconColor }};
+aiAgentMenuIconOver: icon {{ "agent/sparkle-22x22", menuIconColor }};
+
+aiAgentSettingsWidth: 440px;
+aiAgentSettingsLabel: FlatLabel(defaultFlatLabel) {
+	minWidth: 300px;
+	textFg: windowSubTextFg;
+}
+aiAgentSettingsSection: FlatLabel(defaultFlatLabel) {
+	textFg: windowActiveTextFg;
+	style: TextStyle(semiboldTextStyle) {
+		font: font(13px semibold);
+	}
+}
+aiAgentSettingsPadding: margins(22px, 8px, 22px, 8px);
+aiAgentSettingsFieldPadding: margins(22px, 0px, 22px, 6px);
+aiAgentProviderButton: RoundButton(defaultLightButton) {
+	height: 32px;
+	textTop: 7px;
+	width: -22px;
+	radius: 16px;
+	style: TextStyle(defaultTextStyle) {
+		font: font(13px);
+	}
+}
+aiAgentProviderButtonActive: RoundButton(defaultActiveButton) {
+	height: 32px;
+	textTop: 7px;
+	width: -22px;
+	radius: 16px;
+	style: TextStyle(semiboldTextStyle) {
+		font: font(13px semibold);
+	}
+}
+aiAgentProviderSkip: 8px;
+aiAgentModelChip: RoundButton(defaultLightButton) {
+	height: 26px;
+	textTop: 4px;
+	width: -16px;
+	radius: 13px;
+	style: TextStyle(defaultTextStyle) {
+		font: font(12px);
+	}
+}
+aiAgentLoginButton: RoundButton(defaultActiveButton) {
+	height: 38px;
+	textTop: 10px;
+	width: -40px;
+	radius: 19px;
+}

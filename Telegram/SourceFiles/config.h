@@ -44,8 +44,8 @@ inline const char *cGUIDStr() {
 
 #if defined TDESKTOP_API_ID && defined TDESKTOP_API_HASH
 
-constexpr auto ApiId = TDESKTOP_API_ID;
-constexpr auto ApiHash = QT_STRINGIFY(TDESKTOP_API_HASH);
+constexpr auto BuiltinApiId = TDESKTOP_API_ID;
+constexpr auto BuiltinApiHash = QT_STRINGIFY(TDESKTOP_API_HASH);
 
 #else // TDESKTOP_API_ID && TDESKTOP_API_HASH
 
@@ -66,10 +66,14 @@ constexpr auto ApiHash = QT_STRINGIFY(TDESKTOP_API_HASH);
 
 #error You are required to provide API_ID and API_HASH.
 
-constexpr auto ApiId = 17349;
-constexpr auto ApiHash = "344583e45741c457fe1862106095a5eb";
+constexpr auto BuiltinApiId = 17349;
+constexpr auto BuiltinApiHash = "344583e45741c457fe1862106095a5eb";
 
 #endif // TDESKTOP_API_ID && TDESKTOP_API_HASH
+
+// Agentgram: api_id / api_hash can be overridden at runtime, see api_credentials.cpp.
+[[nodiscard]] int ApiId();
+[[nodiscard]] QString ApiHash();
 
 #if Q_BYTE_ORDER == Q_BIG_ENDIAN
 #error "Only little endian is supported!"

@@ -274,6 +274,10 @@ This atlas divides Telegram Desktop's sources into named areas, ordered from fou
 - Paths: `SourceFiles/export/`
 - Exporting Telegram data: the settings and progress UI, the controller that walks chats and media through its own API wrapper, the export data model and the HTML and JSON writers. Other code only starts it and shows its top bar.
 
+### ai-agent — Agentgram AI agent
+- Paths: `SourceFiles/ai_agent/`, `SourceFiles/core/api_credentials*`
+- The Agentgram side panel with an LLM agent: provider presets, OAuth sign-in (ChatGPT, OpenRouter) and API keys, streaming clients for OpenAI-compatible, Responses and Anthropic APIs, the agent loop with confirmations, the Telegram tools it calls (chats, messages, members, drafts) and the runtime api_id override. It must not own chat screens or send pipelines; it calls `api` and `window` for those.
+
 ## Features: peers and profiles
 
 ### boxes/peers — managing chats, channels and contacts
