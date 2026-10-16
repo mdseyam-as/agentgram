@@ -5,6 +5,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
+#include <map>
+
 #include "ai_agent/ai_agent_config.h"
 
 #include <QtCore/QJsonArray>

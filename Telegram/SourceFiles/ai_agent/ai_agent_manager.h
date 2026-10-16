@@ -5,6 +5,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
+#include <deque>
+
 #include "ai_agent/ai_agent_config.h"
 #include "ai_agent/ai_agent_llm.h"
 #include "base/weak_ptr.h"
