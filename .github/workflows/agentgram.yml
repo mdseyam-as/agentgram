@@ -11,18 +11,15 @@ permissions:
 
 jobs:
 
-  windows:
-    name: Windows x64
+  windows-libs:
+    name: Windows libraries
+    timeout-minutes: 355
     runs-on: windows-latest
-    timeout-minutes: 360
-
     env:
       PREPARE_PATH: "Telegram/build/prepare/prepare.py"
-
     defaults:
       run:
         shell: cmd
-
     steps:
       - name: Prepare directories.
         run: |
@@ -47,6 +44,7 @@ jobs:
           DOCPATH=$TBUILD/$REPO_NAME/docs/building-win.md
           SDK="$(grep "SDK version" $DOCPATH | sed -r 's/.*\*\*(.*)\*\* SDK version.*/\1/')"
           echo "SDK=$SDK" >> $GITHUB_ENV
+          sed -i '/CMAKE_${lang}_FLAGS_DEBUG_INIT/s/${_Zi}//' "$PROGRAMFILES"/CMake/share/cmake*/Modules/Platform/Windows-MSVC.cmake
           echo "$(sha256sum $TBUILD/$REPO_NAME/$PREPARE_PATH | awk '{ print $1 }')" >> CACHE_KEY.txt
           echo "$SDK" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(sha256sum CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
@@ -65,15 +63,15 @@ jobs:
           nuget sources Disable -Name "Microsoft Visual Studio Offline Packages"
           nuget sources Add -Source https://api.nuget.org/v3/index.json & exit 0
 
-      - name: ThirdParty cache.
-        uses: actions/cache@v4
+      - name: Restore ThirdParty.
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.TBUILD }}\ThirdParty
-          key: ${{ runner.OS }}-third-party-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-third-party-
+          key: win-third-party-${{ env.CACHE_KEY }}-${{ github.run_id }}
+          restore-keys: win-third-party-
 
-      - name: Libraries cache.
-        uses: actions/cache@v4
+      - name: Restore libraries.
+        uses: actions/cache/restore@v4
         with:
           path: |
             ${{ env.LibrariesPath }}\*
@@ -81,25 +79,149 @@ jobs:
             !${{ env.LibrariesPath }}\[qQ]t[_-]*
             ${{ env.LibrariesPath }}\cache_keys\*
             !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
-          key: ${{ runner.OS }}-x64-libs-v2-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-x64-libs-v2-
+          key: win-x64-libs-${{ env.CACHE_KEY }}-${{ github.run_id }}
+          restore-keys: win-x64-libs-
 
-      - name: Qt cache.
-        uses: actions/cache@v4
+      - name: Restore Qt.
+        uses: actions/cache/restore@v4
         with:
           path: |
             ${{ env.LibrariesPath }}\[qQ]t[_-]*
             ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
-          key: ${{ runner.OS }}-x64-qt6-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-x64-qt6-
+          key: win-x64-qt6-${{ env.CACHE_KEY }}-${{ github.run_id }}
+          restore-keys: win-x64-qt6-
 
       - name: Libraries.
+        id: libs
+        timeout-minutes: 320
+        continue-on-error: true
         run: |
           %TBUILD%\%REPO_NAME%\Telegram\build\prepare\win.bat skip-release silent qt6
 
       - name: Free up some disk space.
+        if: always()
         shell: bash
         run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.pc' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/nv-codec-headers/*' ')' -type f ')' -o -empty ')' -delete
+
+      - name: Save ThirdParty.
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.TBUILD }}\ThirdParty
+          key: win-third-party-${{ env.CACHE_KEY }}-${{ github.run_id }}
+
+      - name: Save libraries.
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\*
+            !${{ env.LibrariesPath }}\cache_keys
+            !${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\*
+            !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: win-x64-libs-${{ env.CACHE_KEY }}-${{ github.run_id }}
+
+      - name: Save Qt.
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: win-x64-qt6-${{ env.CACHE_KEY }}-${{ github.run_id }}
+
+      - name: Check libraries.
+        if: steps.libs.outcome != 'success'
+        shell: bash
+        run: |
+          echo "Libraries are not complete yet, partial progress was cached. Re-run the workflow."
+          exit 1
+
+  windows:
+    name: Windows x64
+    needs: windows-libs
+    timeout-minutes: 355
+    runs-on: windows-latest
+    env:
+      PREPARE_PATH: "Telegram/build/prepare/prepare.py"
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - name: Prepare directories.
+        run: |
+          mkdir %userprofile%\TBuild\Libraries
+          mklink /d %GITHUB_WORKSPACE%\TBuild %userprofile%\TBuild
+          echo TBUILD=%GITHUB_WORKSPACE%\TBuild>>%GITHUB_ENV%
+          echo LibrariesPath=%GITHUB_WORKSPACE%\TBuild\Libraries\win64>>%GITHUB_ENV%
+
+      - name: Get repository name.
+        shell: bash
+        run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
+
+      - name: Clone.
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          path: ${{ env.TBUILD }}\${{ env.REPO_NAME }}
+
+      - name: First set up.
+        shell: bash
+        run: |
+          DOCPATH=$TBUILD/$REPO_NAME/docs/building-win.md
+          SDK="$(grep "SDK version" $DOCPATH | sed -r 's/.*\*\*(.*)\*\* SDK version.*/\1/')"
+          echo "SDK=$SDK" >> $GITHUB_ENV
+          sed -i '/CMAKE_${lang}_FLAGS_DEBUG_INIT/s/${_Zi}//' "$PROGRAMFILES"/CMake/share/cmake*/Modules/Platform/Windows-MSVC.cmake
+          echo "$(sha256sum $TBUILD/$REPO_NAME/$PREPARE_PATH | awk '{ print $1 }')" >> CACHE_KEY.txt
+          echo "$SDK" >> CACHE_KEY.txt
+          echo "CACHE_KEY=$(sha256sum CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
+          git config --global user.email "you@example.com"
+          git config --global user.name "Sample"
+
+      - uses: Eden-CI/msvc-dev-cmd@master
+        name: Native Tools Command Prompt.
+        with:
+          arch: x64
+          sdk: ${{ env.SDK }}
+          toolset: '14.44'
+
+      - name: NuGet sources.
+        run: |
+          nuget sources Disable -Name "Microsoft Visual Studio Offline Packages"
+          nuget sources Add -Source https://api.nuget.org/v3/index.json & exit 0
+
+      - name: Restore ThirdParty.
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.TBUILD }}\ThirdParty
+          key: win-third-party-${{ env.CACHE_KEY }}-${{ github.run_id }}
+          restore-keys: win-third-party-
+
+      - name: Restore libraries.
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\*
+            !${{ env.LibrariesPath }}\cache_keys
+            !${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\*
+            !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: win-x64-libs-${{ env.CACHE_KEY }}-${{ github.run_id }}
+          restore-keys: win-x64-libs-
+
+      - name: Restore Qt.
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.LibrariesPath }}\[qQ]t[_-]*
+            ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+          key: win-x64-qt6-${{ env.CACHE_KEY }}-${{ github.run_id }}
+          restore-keys: win-x64-qt6-
+
+      - name: Libraries.
+        run: |
+          %TBUILD%\%REPO_NAME%\Telegram\build\prepare\win.bat skip-release silent qt6
 
       - name: API credentials.
         shell: bash
@@ -121,20 +243,21 @@ jobs:
           x64 ^
           qt6 ^
           %TDESKTOP_BUILD_API% ^
-          -D CMAKE_CONFIGURATION_TYPES=Release ^
+          -D CMAKE_CONFIGURATION_TYPES=Debug ^
+          -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= ^
           -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON ^
           -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON
 
-          cmake --build ..\out --config Release --parallel --target Telegram
+          cmake --build ..\out --config Debug --parallel --target Telegram
 
       - name: Package.
         shell: bash
         run: |
-          OUT="$TBUILD/$REPO_NAME/out/Release"
+          OUT="$TBUILD/$REPO_NAME/out/Debug"
           mkdir -p dist/Agentgram
           cp "$OUT/Telegram.exe" dist/Agentgram/Agentgram.exe
           cp "$TBUILD/$REPO_NAME/Telegram/build/agentgram/README-user.txt" dist/Agentgram/README.txt
-          cd dist && 7z a -tzip Agentgram-windows-x64.zip Agentgram
+          cd dist && 7z a -tzip -mx=7 Agentgram-windows-x64.zip Agentgram
 
       - uses: actions/upload-artifact@v4
         with:
@@ -150,6 +273,7 @@ jobs:
 
   linux:
     name: Linux x64
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
