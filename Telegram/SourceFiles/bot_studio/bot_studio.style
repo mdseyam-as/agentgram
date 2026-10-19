@@ -10,8 +10,8 @@ using "ui/layers/layers.style";
 using "boxes/boxes.style";
 using "ai_agent/ai_agent.style";
 
-botStudioWindowSize: size(1040px, 700px);
-botStudioWindowMinSize: size(760px, 480px);
+botStudioWindowSize: size(1200px, 780px);
+botStudioWindowMinSize: size(900px, 560px);
 
 botStudioSidebarWidth: 270px;
 botStudioSidebarBg: windowBgOver;
@@ -170,3 +170,99 @@ botStudioTemplateButtonActive: RoundButton(aiAgentModelChipActive) {
 	}
 }
 botStudioMenuIcon: icon {{ "menu/bot", menuIconColor }};
+
+// Modern look: pills, cards and the visual constructor.
+botStudioPillHeight: 34px;
+botStudioPillPadding: 16px;
+botStudioPillRadius: 17px;
+botStudioPillBg: windowBgOver;
+botStudioPillFont: font(13px semibold);
+botStudioPillSkip: 3px;
+
+botStudioStatusPillHeight: 22px;
+botStudioStatusPillFont: font(12px semibold);
+botStudioStatusPillPadding: 9px;
+
+botStudioLogoSize: 34px;
+botStudioCardRadius: 14px;
+botStudioCardBg: windowBg;
+botStudioCardBorder: shadowFg;
+
+botStudioCanvasBg: windowBgOver;
+botStudioCanvasDot: windowSubTextFg;
+botStudioCanvasPadding: 40px;
+botStudioNodeWidth: 250px;
+botStudioNodeRadius: 14px;
+botStudioNodePadding: margins(14px, 12px, 14px, 12px);
+botStudioNodeTitleFont: font(13px semibold);
+botStudioNodeTextFont: font(12px);
+botStudioNodeBadgeFont: font(11px semibold);
+botStudioNodeButtonHeight: 26px;
+botStudioNodeButtonSkip: 5px;
+botStudioNodeButtonFont: font(12px);
+botStudioNodeButtonBg: windowBgOver;
+botStudioNodeStripe: 4px;
+botStudioArrowFg: windowSubTextFg;
+botStudioArrowWidth: 2px;
+
+botStudioInspectorWidth: 360px;
+botStudioInspectorBg: windowBg;
+botStudioInspectorPadding: margins(16px, 12px, 16px, 12px);
+botStudioInspectorSection: FlatLabel(defaultFlatLabel) {
+	textFg: windowActiveTextFg;
+	style: TextStyle(semiboldTextStyle) {
+		font: font(13px semibold);
+	}
+}
+botStudioInspectorLabel: FlatLabel(defaultFlatLabel) {
+	minWidth: 100px;
+	textFg: windowSubTextFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(12px);
+	}
+}
+botStudioField: InputField(defaultInputField) {
+	textMargins: margins(0px, 22px, 0px, 6px);
+	heightMin: 50px;
+}
+botStudioFieldMulti: InputField(botStudioField) {
+	heightMax: 220px;
+}
+botStudioTargetButton: RoundButton(defaultLightButton) {
+	height: 30px;
+	textTop: 6px;
+	width: -20px;
+	radius: 15px;
+	style: TextStyle(defaultTextStyle) {
+		font: font(12px);
+	}
+}
+botStudioRemoveButton: IconButton(aiAgentHeaderButton) {
+	icon: icon {{ "box_button_close", boxTitleCloseFg }};
+	iconOver: icon {{ "box_button_close", boxTitleCloseFgOver }};
+	width: 32px;
+	height: 32px;
+	rippleAreaPosition: point(2px, 2px);
+	rippleAreaSize: 28px;
+}
+botStudioCheckbox: Checkbox(defaultBoxCheckbox) {
+	width: 300px;
+}
+botStudioDangerButton: RoundButton(defaultLightButton) {
+	height: 34px;
+	textTop: 8px;
+	width: -24px;
+	radius: 17px;
+	textFg: attentionButtonFg;
+	textFgOver: attentionButtonFgOver;
+	textBgOver: attentionButtonBgOver;
+	ripple: RippleAnimation(defaultRippleAnimation) {
+		color: attentionButtonBgRipple;
+	}
+}
+
+botStudioTemplateCardHeight: 92px;
+botStudioTemplateCardSkip: 10px;
+botStudioTemplateEmojiFont: font(22px);
+botStudioTemplateTitleFont: font(14px semibold);
+botStudioTemplateTextFont: font(12px);

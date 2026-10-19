@@ -2462,6 +2462,10 @@ if (LINUX)
         bot_studio/bot_studio_agent_tools.h
         bot_studio/bot_studio_bot_api.cpp
         bot_studio/bot_studio_bot_api.h
+        bot_studio/bot_studio_flow.cpp
+        bot_studio/bot_studio_flow.h
+        bot_studio/bot_studio_flow_editor.cpp
+        bot_studio/bot_studio_flow_editor.h
         bot_studio/bot_studio_manager.cpp
         bot_studio/bot_studio_manager.h
         bot_studio/bot_studio_runtime.cpp

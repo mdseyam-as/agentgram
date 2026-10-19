@@ -2,5 +2,7 @@
   <qresource prefix="/bot_studio">
     <file alias="prelude.js">../../bot_studio/prelude.js</file>
     <file alias="docs.md">../../bot_studio/docs.md</file>
+    <file alias="flow_engine.js">../../bot_studio/flow_engine.js</file>
+    <file alias="flow_templates.json">../../bot_studio/flow_templates.json</file>
   </qresource>
 </RCC>

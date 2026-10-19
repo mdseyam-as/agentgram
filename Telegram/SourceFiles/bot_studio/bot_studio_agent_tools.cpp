@@ -6,6 +6,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "bot_studio/bot_studio_agent_tools.h"
 
 #include "base/call_delayed.h"
+#include "bot_studio/bot_studio_flow.h"
 #include "bot_studio/bot_studio_manager.h"
 #include "bot_studio/bot_studio_window.h"
 #include "main/main_session.h"
@@ -124,6 +125,7 @@ constexpr auto kMaxStorageText = 20000;
 		{ u"username"_q, u"@"_q + bot.username },
 		{ u"status"_q, StatusName(studio->status(bot.id)) },
 		{ u"autostart"_q, bot.enabled },
+		{ u"mode"_q, bot.visual() ? u"visual"_q : u"code"_q },
 		{ u"code_lines"_q, int(bot.code.count('\n') + 1) },
 		{ u"errors_in_log"_q, studio->errorCount(bot.id) },
 		{ u"link"_q, u"https://t.me/"_q + bot.username },
@@ -196,12 +198,14 @@ std::vector<ToolDefinition> AgentToolDefinitions() {
 		u"List bots in Bot Studio with their status."_q,
 		Schema({}));
 	add(u"bot_studio_create"_q,
-		u"Add a Telegram bot to Bot Studio by its BotFather token, "
-		"optionally with code, and start it. The bot then runs inside "
-		"Agentgram, no deploy needed."_q,
+		u"Add a Telegram bot to Bot Studio by its BotFather token, with a "
+		"visual scheme (flow, preferred for simple bots: the user can edit "
+		"it in the visual constructor) or JavaScript code, and start it. "
+		"The bot then runs inside Agentgram, no deploy needed."_q,
 		Schema({
 			{ u"token"_q, Prop(u"string"_q, u"Bot token from @BotFather."_q) },
-			{ u"code"_q, Prop(u"string"_q, u"Bot JavaScript code. If empty, a starter template is used."_q) },
+			{ u"flow"_q, Prop(u"object"_q, u"Visual scheme, see bot_studio_docs. Use either flow or code."_q) },
+			{ u"code"_q, Prop(u"string"_q, u"Bot JavaScript code. If both are empty, a starter template is used."_q) },
 			{ u"start"_q, Prop(u"boolean"_q, u"Start the bot right away, default true."_q) },
 		}, { u"token"_q }));
 	add(u"bot_studio_get"_q,
@@ -215,6 +219,14 @@ std::vector<ToolDefinition> AgentToolDefinitions() {
 			{ u"bot"_q, BotProp() },
 			{ u"code"_q, Prop(u"string"_q, u"Complete new JavaScript code of the bot."_q) },
 		}, { u"bot"_q, u"code"_q }));
+	add(u"bot_studio_set_flow"_q,
+		u"Replace the visual scheme (flow) of a bot; switches a code bot "
+		"to the visual constructor. The scheme is validated; a running bot "
+		"restarts. Returns the status, problems and the log after restart."_q,
+		Schema({
+			{ u"bot"_q, BotProp() },
+			{ u"flow"_q, Prop(u"object"_q, u"Complete scheme: start, blocks, commands, keywords, fallback, buttonsStyle."_q) },
+		}, { u"bot"_q, u"flow"_q }));
 	add(u"bot_studio_start"_q,
 		u"Start a bot (it also starts with Agentgram from now on)."_q,
 		Schema({ { u"bot"_q, BotProp() } }, { u"bot"_q }));
@@ -274,6 +286,13 @@ ToolPresentation PresentAgentTool(
 			u"Обновляю код "_q + botName(),
 			u"%1 строк кода"_q.arg(code.count('\n') + 1),
 		};
+	} else if (name == u"bot_studio_set_flow"_q) {
+		const auto blocks = args.value(u"flow"_q).toObject().value(
+			u"blocks"_q).toArray().size();
+		return {
+			u"Обновляю схему "_q + botName(),
+			u"Блоков в схеме: %1"_q.arg(blocks),
+		};
 	} else if (name == u"bot_studio_start"_q) {
 		return { u"Запускаю "_q + botName() };
 	} else if (name == u"bot_studio_stop"_q) {
@@ -324,7 +343,18 @@ void ExecuteAgentTool(
 		return;
 	} else if (name == u"bot_studio_create"_q) {
 		const auto code = args.value(u"code"_q).toString();
-		if (!code.trimmed().isEmpty()) {
+		auto flow = args.value(u"flow"_q).toObject();
+		if (flow.isEmpty() && args.value(u"flow"_q).isString()) {
+			flow = QJsonDocument::fromJson(
+				args.value(u"flow"_q).toString().toUtf8()).object();
+		}
+		if (!flow.isEmpty()) {
+			const auto syntax = Runtime::Check(GenerateFlowCode(flow));
+			if (!syntax.isEmpty()) {
+				done(Fail(u"The flow is invalid:\n"_q + syntax));
+				return;
+			}
+		} else if (!code.trimmed().isEmpty()) {
 			const auto syntax = Runtime::Check(code);
 			if (!syntax.isEmpty()) {
 				done(Fail(u"Syntax error, the bot was not created:\n"_q
@@ -337,6 +367,7 @@ void ExecuteAgentTool(
 		studio->create(
 			args.value(u"token"_q).toString(),
 			code,
+			flow,
 			[=](QString id, QString error) {
 				if (!error.isEmpty()) {
 					auto result = QJsonObject{ { u"error"_q, error } };
@@ -376,7 +407,15 @@ void ExecuteAgentTool(
 	const auto id = bot->id;
 	if (name == u"bot_studio_get"_q) {
 		auto result = Describe(studio, *bot);
-		result.insert(u"code"_q, bot->code);
+		if (bot->visual()) {
+			result.insert(u"flow"_q, studio->flow(id));
+			result.insert(
+				u"note"_q,
+				u"Visual bot: change it with bot_studio_set_flow; the "
+				"code is generated from the flow."_q);
+		} else {
+			result.insert(u"code"_q, bot->code);
+		}
 		result.insert(u"log"_q, Logs(studio, id, kDefaultLogs));
 		done(Ok(result));
 	} else if (name == u"bot_studio_set_code"_q) {
@@ -399,6 +438,41 @@ void ExecuteAgentTool(
 			result.insert(
 				u"note"_q,
 				u"Code saved. The bot is stopped, start it with "
+				"bot_studio_start."_q);
+			done(Ok(result));
+		}
+	} else if (name == u"bot_studio_set_flow"_q) {
+		auto flow = args.value(u"flow"_q).toObject();
+		if (flow.isEmpty() && args.value(u"flow"_q).isString()) {
+			flow = QJsonDocument::fromJson(
+				args.value(u"flow"_q).toString().toUtf8()).object();
+		}
+		if (FlowBlocks(flow).isEmpty()) {
+			done(Fail(u"flow must be an object with a non-empty blocks "
+				"array."_q));
+			return;
+		}
+		const auto skip = studio->logs(id).size();
+		const auto syntax = studio->setFlow(id, flow);
+		if (!syntax.isEmpty()) {
+			done(Fail(u"The flow produced invalid code:\n"_q + syntax));
+			return;
+		}
+		auto extra = QJsonObject();
+		const auto problems = ValidateFlow(studio->flow(id));
+		if (!problems.isEmpty()) {
+			extra.insert(u"problems"_q, QJsonArray::fromStringList(problems));
+		}
+		if (bot->enabled) {
+			ReportAfterStart(studio, id, skip, extra, done);
+		} else {
+			auto result = Describe(studio, *bot);
+			for (auto i = extra.begin(); i != extra.end(); ++i) {
+				result.insert(i.key(), i.value());
+			}
+			result.insert(
+				u"note"_q,
+				u"Scheme saved. The bot is stopped, start it with "
 				"bot_studio_start."_q);
 			done(Ok(result));
 		}
@@ -445,7 +519,11 @@ QString AgentPromptSection() {
 Bot Studio (bot_studio_* tools): the user can build Telegram bots right in
 Agentgram. A bot is a JavaScript file that Agentgram runs locally (no server,
 no deploy) while the app is open. Workflow:
-- Call bot_studio_docs before writing bot code, then write complete code.
+- Call bot_studio_docs before building a bot. Prefer a visual scheme
+  (flow) for menus, FAQ, forms, bookings and AI chats: the user can then
+  edit it in the visual constructor. Write JavaScript code only for logic
+  a scheme can't express. For a visual bot use bot_studio_set_flow, never
+  bot_studio_set_code (that would turn it into a code bot).
 - New bot without a token: ask the user to approve, then talk to @BotFather
   with send_message (/newbot, then a display name, then a username ending in
   "bot"), read its replies with get_messages and pass the token from the last

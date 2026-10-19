@@ -37,9 +37,15 @@ struct BotInfo {
 	int64 botId = 0;
 	QString token;
 	QString code;
+	// Visual constructor scheme as compact JSON, empty for code bots.
+	QString flow;
 	bool enabled = false;
 	int64 created = 0;
 	int64 updated = 0;
+
+	[[nodiscard]] bool visual() const {
+		return !flow.isEmpty();
+	}
 };
 
 struct LogEntry {
@@ -93,6 +99,7 @@ public:
 	void create(
 		const QString &token,
 		const QString &code,
+		const QJsonObject &flow,
 		Fn<void(QString id, QString error)> done);
 	void setToken(
 		const QString &id,
@@ -101,6 +108,11 @@ public:
 	// Saves the code and restarts a running bot. Returns a syntax error,
 	// in that case a running bot keeps the old code.
 	QString setCode(const QString &id, const QString &code);
+	// Saves a visual scheme, generates its code and restarts the bot.
+	QString setFlow(const QString &id, const QJsonObject &flow);
+	[[nodiscard]] QJsonObject flow(const QString &id) const;
+	// Keeps the generated code and drops the scheme.
+	void convertToCode(const QString &id);
 	void start(const QString &id);
 	void stop(const QString &id);
 	void restart(const QString &id);
@@ -112,6 +124,7 @@ public:
 private:
 	struct Instance;
 
+	QString applyCode(const QString &id, const QString &code);
 	void load();
 	void save();
 	void launch(const QString &id);

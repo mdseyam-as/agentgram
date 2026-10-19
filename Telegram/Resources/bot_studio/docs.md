@@ -1,4 +1,58 @@
-# Agentgram Bot Studio — bot script reference
+# Agentgram Bot Studio — reference
+
+A bot is either a **visual scheme** (flow, edited in the visual constructor —
+best for menus, FAQ, forms, bookings, AI chats) or a **JavaScript file** (any
+logic). Both run locally inside Agentgram.
+
+## Visual scheme (flow)
+
+Set it with `bot_studio_set_flow` / `bot_studio_create {flow}`. JSON:
+
+```json
+{
+  "start": "welcome",
+  "buttonsStyle": "inline",
+  "blocks": [
+    { "id": "welcome", "title": "Приветствие", "x": 40, "y": 40,
+      "text": "Здравствуйте, {first_name}! Выберите:",
+      "photo": "",
+      "buttons": [ { "text": "💳 Цены", "goto": "prices" },
+                   { "text": "🌐 Сайт", "url": "https://example.com" } ] },
+    { "id": "prices", "title": "Цены", "x": 360, "y": 40,
+      "text": "Стрижка — 1500 ₽", "next": "ask_phone" },
+    { "id": "ask_phone", "title": "Телефон", "x": 680, "y": 40,
+      "text": "Оставьте телефон:",
+      "input": { "enabled": true, "variable": "телефон", "kind": "phone", "next": "done" } },
+    { "id": "done", "title": "Готово", "x": 680, "y": 220, "notifyOwner": true,
+      "text": "Спасибо! Перезвоним на {телефон}.",
+      "buttons": [ { "text": "⬅️ В меню", "goto": "welcome" } ] }
+  ],
+  "commands": [ { "command": "start", "description": "Меню", "goto": "welcome" } ],
+  "keywords": [ { "words": "цена, стоимость", "goto": "prices" } ],
+  "fallback": { "mode": "ai", "prompt": "Ты вежливый администратор салона." }
+}
+```
+
+- Block = one bot message: `text` (with `{variables}`), optional `photo`
+  (https URL or file_id), `buttons` (each goes to a block `goto` or opens `url`;
+  2 short buttons per row), `next` (show another block right after, when the
+  block has no buttons/input), `input` (wait for the user's answer, save it to
+  `variable`; `kind`: text, phone (shows a "send phone" button), number, email;
+  then go to `next`), `notifyOwner` (send the owner all collected answers when
+  the block is shown — use it on the final "thanks" block of a form).
+- Variables: `{first_name}`, `{last_name}`, `{name}`, `{username}`,
+  `{user_id}`, `{bot}` and every saved input variable (any language).
+- `x`, `y`: card position on the canvas; lay blocks out left-to-right by
+  step (≈320 px apart horizontally, ≈190 px vertically).
+- `commands`: slash commands → block (`start` defaults to `start` block).
+- `keywords`: comma-separated words; a message containing one opens the block.
+- `fallback` for any other message: `start` (show the start block), `block`
+  (`goto`), `text` (`text`), `ai` (answer with AI, `prompt` = its role).
+- `buttonsStyle`: `inline` (buttons under the message) or `keyboard`
+  (buttons replace the keyboard).
+- Ids: short latin words. Keep texts friendly; emoji are welcome.
+
+# JavaScript bots
 
 A bot is one JavaScript file (modern JS: async/await, classes, regex, top-level
 await). Agentgram runs it locally inside the app: it long-polls the Telegram

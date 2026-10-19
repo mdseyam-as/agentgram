@@ -1,0 +1,146 @@
+[
+  {
+    "id": "menu",
+    "emoji": "📋",
+    "title": "Меню и ответы",
+    "description": "Приветствие с кнопками разделов: цены, адрес, контакты. Каждый раздел с кнопкой «Назад».",
+    "flow": {
+      "version": 1,
+      "start": "welcome",
+      "buttonsStyle": "inline",
+      "blocks": [
+        { "id": "welcome", "title": "Приветствие", "x": 40, "y": 40,
+          "text": "Здравствуйте, {first_name}! 👋\nВыберите, что вас интересует:",
+          "buttons": [
+            { "text": "💳 Цены", "goto": "prices" },
+            { "text": "📍 Адрес", "goto": "address" },
+            { "text": "📞 Связаться с нами", "goto": "contact" }
+          ] },
+        { "id": "prices", "title": "Цены", "x": 360, "y": 0,
+          "text": "Консультация — 1 000 ₽\nПакет из 5 занятий — 4 000 ₽",
+          "buttons": [ { "text": "⬅️ Назад", "goto": "welcome" } ] },
+        { "id": "address", "title": "Адрес", "x": 360, "y": 190,
+          "text": "Мы находимся: г. Москва, ул. Примерная, 1.\nРаботаем Пн–Пт 9:00–19:00.",
+          "buttons": [ { "text": "⬅️ Назад", "goto": "welcome" } ] },
+        { "id": "contact", "title": "Связаться", "x": 360, "y": 380,
+          "text": "Напишите ваш вопрос одним сообщением — мы ответим в ближайшее время.",
+          "input": { "enabled": true, "variable": "вопрос", "kind": "text", "next": "thanks" } },
+        { "id": "thanks", "title": "Спасибо", "x": 680, "y": 380, "notifyOwner": true,
+          "text": "Спасибо! Мы получили ваш вопрос и скоро ответим.",
+          "buttons": [ { "text": "⬅️ В меню", "goto": "welcome" } ] }
+      ],
+      "commands": [ { "command": "start", "description": "Главное меню", "goto": "welcome" } ],
+      "keywords": [
+        { "words": "цена, стоимость, сколько", "goto": "prices" },
+        { "words": "адрес, где, как добраться", "goto": "address" }
+      ],
+      "fallback": { "mode": "block", "goto": "welcome" }
+    }
+  },
+  {
+    "id": "leads",
+    "emoji": "📝",
+    "title": "Сбор заявок",
+    "description": "Спрашивает имя, телефон и задачу, затем присылает вам заявку в Telegram.",
+    "flow": {
+      "version": 1,
+      "start": "hello",
+      "buttonsStyle": "inline",
+      "blocks": [
+        { "id": "hello", "title": "Приветствие", "x": 40, "y": 40,
+          "text": "Здравствуйте! Оставьте заявку — это займёт меньше минуты.",
+          "buttons": [ { "text": "✍️ Оставить заявку", "goto": "name" } ] },
+        { "id": "name", "title": "Имя", "x": 360, "y": 40,
+          "text": "Как вас зовут?",
+          "input": { "enabled": true, "variable": "имя", "kind": "text", "next": "phone" } },
+        { "id": "phone", "title": "Телефон", "x": 680, "y": 40,
+          "text": "Приятно познакомиться, {имя}! Оставьте номер телефона:",
+          "input": { "enabled": true, "variable": "телефон", "kind": "phone", "next": "task" } },
+        { "id": "task", "title": "Задача", "x": 680, "y": 230,
+          "text": "Коротко опишите, что вам нужно:",
+          "input": { "enabled": true, "variable": "задача", "kind": "text", "next": "done" } },
+        { "id": "done", "title": "Заявка принята", "x": 360, "y": 230, "notifyOwner": true,
+          "text": "Спасибо, {имя}! Заявка принята, мы позвоним на {телефон}.",
+          "buttons": [ { "text": "🔁 Новая заявка", "goto": "name" } ] }
+      ],
+      "commands": [ { "command": "start", "description": "Оставить заявку", "goto": "hello" } ],
+      "keywords": [],
+      "fallback": { "mode": "block", "goto": "hello" }
+    }
+  },
+  {
+    "id": "booking",
+    "emoji": "📅",
+    "title": "Запись на услугу",
+    "description": "Клиент выбирает услугу и день, оставляет телефон — запись приходит вам.",
+    "flow": {
+      "version": 1,
+      "start": "start",
+      "buttonsStyle": "inline",
+      "blocks": [
+        { "id": "start", "title": "Выбор услуги", "x": 40, "y": 40,
+          "text": "Привет, {first_name}! На какую услугу вас записать?",
+          "buttons": [
+            { "text": "✂️ Стрижка", "goto": "haircut" },
+            { "text": "🧔 Борода", "goto": "beard" },
+            { "text": "💈 Комплекс", "goto": "complex" }
+          ] },
+        { "id": "haircut", "title": "Стрижка", "x": 360, "y": 0, "next": "day",
+          "text": "Стрижка — 1 500 ₽, около 45 минут." },
+        { "id": "beard", "title": "Борода", "x": 360, "y": 170, "next": "day",
+          "text": "Оформление бороды — 900 ₽, около 30 минут." },
+        { "id": "complex", "title": "Комплекс", "x": 360, "y": 340, "next": "day",
+          "text": "Стрижка + борода — 2 200 ₽, около 75 минут." },
+        { "id": "day", "title": "Выбор дня", "x": 680, "y": 170,
+          "text": "Когда вам удобно? Напишите день и время, например: «завтра в 18:00».",
+          "input": { "enabled": true, "variable": "время", "kind": "text", "next": "phone" } },
+        { "id": "phone", "title": "Телефон", "x": 1000, "y": 170,
+          "text": "Оставьте номер телефона для подтверждения:",
+          "input": { "enabled": true, "variable": "телефон", "kind": "phone", "next": "booked" } },
+        { "id": "booked", "title": "Записали", "x": 1000, "y": 360, "notifyOwner": true,
+          "text": "Готово! Ждём вас: {время}. Если планы изменятся — просто напишите сюда.",
+          "buttons": [ { "text": "📅 Записаться ещё", "goto": "start" } ] }
+      ],
+      "commands": [ { "command": "start", "description": "Записаться", "goto": "start" } ],
+      "keywords": [ { "words": "запис, время, свобод", "goto": "start" } ],
+      "fallback": { "mode": "block", "goto": "start" }
+    }
+  },
+  {
+    "id": "assistant",
+    "emoji": "🤖",
+    "title": "ИИ-ассистент",
+    "description": "Отвечает на любые вопросы через ИИ, подключённый в Agentgram. Можно задать роль.",
+    "flow": {
+      "version": 1,
+      "start": "hello",
+      "buttonsStyle": "inline",
+      "blocks": [
+        { "id": "hello", "title": "Приветствие", "x": 40, "y": 40,
+          "text": "Привет, {first_name}! Я ИИ-помощник. Задайте любой вопрос 🙂" }
+      ],
+      "commands": [ { "command": "start", "description": "Начать", "goto": "hello" } ],
+      "keywords": [],
+      "fallback": { "mode": "ai",
+        "prompt": "Ты дружелюбный помощник в Telegram. Отвечай кратко, по делу и на языке пользователя. Не используй Markdown." }
+    }
+  },
+  {
+    "id": "blank",
+    "emoji": "✨",
+    "title": "С чистого листа",
+    "description": "Один стартовый блок — соберите своего бота сами.",
+    "flow": {
+      "version": 1,
+      "start": "start",
+      "buttonsStyle": "inline",
+      "blocks": [
+        { "id": "start", "title": "Старт", "x": 40, "y": 40,
+          "text": "Привет, {first_name}!" }
+      ],
+      "commands": [ { "command": "start", "description": "Начать", "goto": "start" } ],
+      "keywords": [],
+      "fallback": { "mode": "start" }
+    }
+  }
+]

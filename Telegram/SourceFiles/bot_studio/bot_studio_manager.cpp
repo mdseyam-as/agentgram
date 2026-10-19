@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ai_agent/ai_agent_manager.h"
 #include "base/unixtime.h"
 #include "bot_studio/bot_studio_bot_api.h"
+#include "bot_studio/bot_studio_flow.h"
 #include "main/main_session.h"
 #include "storage/storage_account.h"
 
@@ -182,6 +183,7 @@ void Studio::load() {
 			.botId = int64(object.value(u"bot_id"_q).toDouble()),
 			.token = object.value(u"token"_q).toString(),
 			.code = object.value(u"code"_q).toString(),
+			.flow = object.value(u"flow"_q).toString(),
 			.enabled = object.value(u"enabled"_q).toBool(),
 			.created = int64(object.value(u"created"_q).toDouble()),
 			.updated = int64(object.value(u"updated"_q).toDouble()),
@@ -202,6 +204,9 @@ void Studio::save() {
 		object.insert(u"bot_id"_q, double(bot.botId));
 		object.insert(u"token"_q, bot.token);
 		object.insert(u"code"_q, bot.code);
+		if (bot.visual()) {
+			object.insert(u"flow"_q, bot.flow);
+		}
 		object.insert(u"enabled"_q, bot.enabled);
 		object.insert(u"created"_q, double(bot.created));
 		object.insert(u"updated"_q, double(bot.updated));
@@ -296,6 +301,7 @@ rpl::producer<QString> Studio::logAdded() const {
 void Studio::create(
 		const QString &token,
 		const QString &code,
+		const QJsonObject &flow,
 		Fn<void(QString id, QString error)> done) {
 	const auto trimmed = token.trimmed();
 	static const auto format = QRegularExpression(
@@ -337,7 +343,15 @@ void Studio::create(
 			.username = me.value(u"username"_q).toString(),
 			.botId = botId,
 			.token = trimmed,
-			.code = code.trimmed().isEmpty() ? NewBotCode() : code,
+			.code = !flow.isEmpty()
+				? GenerateFlowCode(flow)
+				: code.trimmed().isEmpty()
+				? NewBotCode()
+				: code,
+			.flow = flow.isEmpty()
+				? QString()
+				: QString::fromUtf8(QJsonDocument(
+					NormalizeFlow(flow)).toJson(QJsonDocument::Compact)),
 			.created = now,
 			.updated = now,
 		};
@@ -393,6 +407,40 @@ void Studio::setToken(
 }
 
 QString Studio::setCode(const QString &id, const QString &code) {
+	if (const auto bot = botMutable(id)) {
+		bot->flow = QString();
+	}
+	return applyCode(id, code);
+}
+
+QString Studio::setFlow(const QString &id, const QJsonObject &flow) {
+	const auto bot = botMutable(id);
+	if (!bot) {
+		return u"Бот не найден."_q;
+	}
+	const auto normalized = NormalizeFlow(flow);
+	bot->flow = QString::fromUtf8(
+		QJsonDocument(normalized).toJson(QJsonDocument::Compact));
+	return applyCode(id, GenerateFlowCode(normalized));
+}
+
+QJsonObject Studio::flow(const QString &id) const {
+	const auto bot = this->bot(id);
+	return (bot && bot->visual())
+		? QJsonDocument::fromJson(bot->flow.toUtf8()).object()
+		: QJsonObject();
+}
+
+void Studio::convertToCode(const QString &id) {
+	if (const auto bot = botMutable(id); bot && bot->visual()) {
+		bot->flow = QString();
+		save();
+		_botUpdated.fire_copy(id);
+		addLog(id, LogLevel::System, u"Бот переведён в режим кода."_q);
+	}
+}
+
+QString Studio::applyCode(const QString &id, const QString &code) {
 	const auto bot = botMutable(id);
 	if (!bot) {
 		return u"Бот не найден."_q;

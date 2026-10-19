@@ -278,6 +278,10 @@ This atlas divides Telegram Desktop's sources into named areas, ordered from fou
 - Paths: `SourceFiles/ai_agent/`, `SourceFiles/core/api_credentials*`
 - The Agentgram side panel with an LLM agent: provider presets, OAuth sign-in (ChatGPT, OpenRouter) and API keys, streaming clients for OpenAI-compatible, Responses and Anthropic APIs, the agent loop with confirmations, the Telegram tools it calls (chats, messages, members, drafts) and the runtime api_id override. It must not own chat screens or send pipelines; it calls `api` and `window` for those.
 
+### bot-studio — Agentgram Bot Studio (Linux)
+- Paths: `SourceFiles/bot_studio/`, `Resources/bot_studio/`, `ThirdParty/quickjs/`, `cmake/lib_quickjs.cmake`
+- Building and running the user's own Telegram bots inside the app: the Bot API client with long polling, the QuickJS runtime with its JS prelude, the visual scheme (flow) model, engine and templates, the bot store with logs and storage, the Bot Studio window with the visual constructor and code editor, and the AI agent tools for bots. Compiled only on Linux behind `AGENTGRAM_BOT_STUDIO`. It must not use MTProto for bots; it calls `ai_agent` for AI answers.
+
 ## Features: peers and profiles
 
 ### boxes/peers — managing chats, channels and contacts
