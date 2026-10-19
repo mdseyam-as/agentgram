@@ -27,11 +27,12 @@ namespace {
 		.defaultBaseUrl = u"https://chatgpt.com/backend-api/codex"_q,
 		.keysUrl = QString(),
 		.models = {
-			u"gpt-5.2"_q,
-			u"gpt-5.2-codex"_q,
-			u"gpt-5.1"_q,
-			u"gpt-5.1-codex-mini"_q,
-			u"gpt-5-codex"_q,
+			u"gpt-6.1-sol"_q,
+			u"gpt-6-astra"_q,
+			u"gpt-6-sol"_q,
+			u"gpt-6-luna"_q,
+			u"gpt-5.6-sol"_q,
+			u"gpt-5.3-codex"_q,
 		},
 		.oauth = OAuthKind::ChatGPT,
 		.apiKey = false,
@@ -44,11 +45,11 @@ namespace {
 		.defaultBaseUrl = u"https://api.openai.com/v1"_q,
 		.keysUrl = u"https://platform.openai.com/api-keys"_q,
 		.models = {
-			u"gpt-5.2"_q,
-			u"gpt-5.1"_q,
-			u"gpt-5-mini"_q,
-			u"gpt-4.1"_q,
-			u"gpt-4o-mini"_q,
+			u"gpt-6.1-sol"_q,
+			u"gpt-6-astra"_q,
+			u"gpt-6-sol"_q,
+			u"gpt-6-luna"_q,
+			u"gpt-5.6-terra"_q,
 		},
 	});
 	add({
@@ -74,11 +75,14 @@ namespace {
 		.defaultBaseUrl = u"https://openrouter.ai/api/v1"_q,
 		.keysUrl = u"https://openrouter.ai/keys"_q,
 		.models = {
+			u"openai/gpt-6.1-sol"_q,
+			u"anthropic/claude-opus-5.5"_q,
 			u"anthropic/claude-sonnet-5.5"_q,
-			u"openai/gpt-5.2"_q,
-			u"google/gemini-3-pro-preview"_q,
-			u"deepseek/deepseek-chat"_q,
-			u"x-ai/grok-4"_q,
+			u"google/gemini-4-argon"_q,
+			u"x-ai/grok-4.7"_q,
+			u"deepseek/deepseek-v4.1-flash"_q,
+			u"moonshotai/kimi-k3"_q,
+			u"qwen/qwen3.8-max-prime"_q,
 		},
 		.oauth = OAuthKind::OpenRouter,
 	});
@@ -91,9 +95,9 @@ namespace {
 			= u"https://generativelanguage.googleapis.com/v1beta/openai"_q,
 		.keysUrl = u"https://aistudio.google.com/apikey"_q,
 		.models = {
-			u"gemini-3-pro-preview"_q,
-			u"gemini-2.5-pro"_q,
-			u"gemini-2.5-flash"_q,
+			u"gemini-4-argon"_q,
+			u"gemini-3.8-flash"_q,
+			u"gemini-3.5-flash-lite"_q,
 		},
 	});
 	add({
@@ -112,7 +116,10 @@ namespace {
 		.format = ApiFormat::OpenAIChat,
 		.defaultBaseUrl = u"https://api.x.ai/v1"_q,
 		.keysUrl = u"https://console.x.ai"_q,
-		.models = { u"grok-4"_q, u"grok-4-fast"_q },
+		.models = {
+			u"grok-4.7"_q,
+			u"grok-4.6"_q,
+		},
 	});
 	add({
 		.id = u"mistral"_q,

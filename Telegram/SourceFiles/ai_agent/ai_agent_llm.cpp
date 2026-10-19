@@ -784,7 +784,7 @@ void FetchModels(
 	const auto path = (settings.format == ApiFormat::Anthropic)
 		? u"/v1/models?limit=1000"_q
 		: (settings.format == ApiFormat::OpenAIResponses)
-		? u"/models?client_version=0.99.0"_q
+		? u"/models?client_version=0.163.0"_q
 		: u"/models"_q;
 	auto request = PrepareRequest(settings, path);
 	request.setRawHeader("Accept", "application/json");
