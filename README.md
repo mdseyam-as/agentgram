@@ -38,6 +38,13 @@ Telegram bots. A bot runs **inside Agentgram** while the app is open: it
 receives messages through the Telegram Bot API, so there is nothing to host or
 deploy. Enabled bots start together with the app.
 
+* **Node editor in the style of n8n / Make**: an endless canvas with zoom
+  (Ctrl + wheel) and panning, drag a connection from the dot on the right of a
+  block to another block, "+" on a free output or a drop on empty space opens
+  the node picker with search, click a connection to delete it, the settings
+  panel slides in from the right, triggers (commands, keywords, "anything
+  else") are nodes too, *Arrange* lays the scheme out, Ctrl+Z / Ctrl+Y,
+  Delete, Ctrl+D.
 * **Visual constructor** for people who don't code. A bot is a scheme of message
   cards on a canvas:
   * a message with text (`{first_name}` and other variables), an optional

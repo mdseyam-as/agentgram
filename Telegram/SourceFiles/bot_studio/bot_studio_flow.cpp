@@ -231,6 +231,24 @@ QStringList ValidateFlow(const QJsonObject &flow) {
 			check(input.value(u"next"_q).toString(), where);
 		}
 	}
+	for (const auto &value : flow.value(u"commands"_q).toArray()) {
+		const auto command = value.toObject();
+		const auto where = u"Команда /"_q + command.value(u"command"_q).toString();
+		if (command.value(u"command"_q).toString().trimmed().isEmpty()) {
+			result.push_back(u"Команде не задано название"_q);
+		} else if (command.value(u"goto"_q).toString().isEmpty()) {
+			result.push_back(where + u": не подключена к блоку"_q);
+		}
+		check(command.value(u"goto"_q).toString(), where);
+	}
+	for (const auto &value : flow.value(u"keywords"_q).toArray()) {
+		const auto keyword = value.toObject();
+		if (keyword.value(u"words"_q).toString().trimmed().isEmpty()) {
+			result.push_back(u"Ключевые слова: не указаны слова"_q);
+		} else if (keyword.value(u"goto"_q).toString().isEmpty()) {
+			result.push_back(u"Ключевые слова: не подключены к блоку"_q);
+		}
+	}
 	return result;
 }
 
