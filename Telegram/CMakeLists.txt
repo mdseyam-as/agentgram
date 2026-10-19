@@ -31,6 +31,9 @@ include(cmake/lib_tgcalls.cmake)
 include(cmake/lib_prisma.cmake)
 include(cmake/lib_fido2.cmake)
 include(cmake/lib_zxcvbn.cmake)
+if (LINUX)
+    include(cmake/lib_quickjs.cmake)
+endif()
 include(cmake/td_export.cmake)
 include(cmake/td_gram.cmake)
 include(cmake/td_iv.cmake)
@@ -2441,6 +2444,38 @@ if (APPLE AND NOT build_macstore)
     PRIVATE
         qrc/telegram/mac_icons.qrc
     )
+endif()
+
+# Local development builds of Agentgram: lighter optimization of the app
+# code (the libraries keep theirs) needs much less memory and time.
+option(AGENTGRAM_FAST_BUILD "Build the Telegram target with -O1." OFF)
+if (AGENTGRAM_FAST_BUILD AND NOT MSVC)
+    target_compile_options(Telegram PRIVATE -O1)
+endif()
+
+# Agentgram Bot Studio: bots run in-process on the QuickJS engine.
+# Linux only for now.
+if (LINUX)
+    nice_target_sources(Telegram ${src_loc}
+    PRIVATE
+        bot_studio/bot_studio_agent_tools.cpp
+        bot_studio/bot_studio_agent_tools.h
+        bot_studio/bot_studio_bot_api.cpp
+        bot_studio/bot_studio_bot_api.h
+        bot_studio/bot_studio_manager.cpp
+        bot_studio/bot_studio_manager.h
+        bot_studio/bot_studio_runtime.cpp
+        bot_studio/bot_studio_runtime.h
+        bot_studio/bot_studio_templates.cpp
+        bot_studio/bot_studio_window.cpp
+        bot_studio/bot_studio_window.h
+    )
+    nice_target_sources(Telegram ${res_loc}
+    PRIVATE
+        qrc/telegram/bot_studio.qrc
+    )
+    target_link_libraries(Telegram PRIVATE desktop-app::lib_quickjs)
+    target_compile_definitions(Telegram PRIVATE AGENTGRAM_BOT_STUDIO)
 endif()
 
 if (WIN32)

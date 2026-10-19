@@ -1,0 +1,1407 @@
+/*
+This file is part of Agentgram, a fork of Telegram Desktop.
+For license and copyright information please follow this link:
+https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+*/
+#include "bot_studio/bot_studio_window.h"
+
+#include "ai_agent/ai_agent_markdown.h"
+#include "ai_agent/ai_agent_panel.h"
+#include "bot_studio/bot_studio_manager.h"
+#include "main/main_session.h"
+#include "ui/abstract_button.h"
+#include "ui/boxes/confirm_box.h"
+#include "ui/layers/generic_box.h"
+#include "ui/layers/layer_manager.h"
+#include "ui/painter.h"
+#include "ui/widgets/buttons.h"
+#include "ui/widgets/discrete_sliders.h"
+#include "ui/widgets/fields/input_field.h"
+#include "ui/widgets/fields/password_input.h"
+#include "ui/widgets/labels.h"
+#include "ui/widgets/popup_menu.h"
+#include "ui/widgets/rp_window.h"
+#include "ui/widgets/scroll_area.h"
+#include "ui/wrap/vertical_layout.h"
+#include "ui/ui_utility.h"
+#include "window/window_controller.h"
+#include "window/window_session_controller.h"
+#include "window/window_session_controller_link_info.h"
+#include "styles/style_ai_agent.h"
+#include "styles/style_bot_studio.h"
+#include "styles/style_layers.h"
+#include "styles/style_widgets.h"
+#include "styles/style_window.h"
+
+#include <QtCore/QJsonDocument>
+#include <QtCore/QRegularExpression>
+#include <QtGui/QShortcut>
+#include <QtGui/QSyntaxHighlighter>
+#include <QtGui/QTextCharFormat>
+#include <QtWidgets/QPlainTextEdit>
+
+namespace BotStudio {
+namespace {
+
+[[nodiscard]] QFont CodeFont() {
+	auto result = QFont(u"monospace"_q);
+	result.setStyleHint(QFont::Monospace);
+	result.setFixedPitch(true);
+	result.setPixelSize(style::ConvertScale(st::botStudioCodeFontSize));
+	return result;
+}
+
+[[nodiscard]] QString ColorName(const style::color &color) {
+	return color->c.name();
+}
+
+[[nodiscard]] QColor StatusColor(BotStatus status) {
+	switch (status) {
+	case BotStatus::Running: return st::botStudioRunningFg->c;
+	case BotStatus::Error: return st::botStudioErrorFg->c;
+	case BotStatus::Starting: return st::windowActiveTextFg->c;
+	case BotStatus::Stopped: return st::botStudioStoppedFg->c;
+	}
+	return st::botStudioStoppedFg->c;
+}
+
+[[nodiscard]] QString BotInitial(const BotInfo &bot) {
+	const auto name = bot.name.trimmed().isEmpty()
+		? bot.username
+		: bot.name.trimmed();
+	return name.isEmpty() ? u"B"_q : name.left(1).toUpper();
+}
+
+void PaintAvatar(
+		QPainter &p,
+		QRect rect,
+		const BotInfo &bot,
+		bool inverted = false) {
+	auto hq = PainterHighQualityEnabler(p);
+	p.setPen(Qt::NoPen);
+	p.setBrush(inverted ? st::windowFgActive : st::windowBgActive);
+	p.drawEllipse(rect);
+	auto font = st::botStudioRowNameFont->f;
+	font.setPixelSize(rect.height() * 2 / 5);
+	p.setFont(font);
+	p.setPen(inverted ? st::windowBgActive : st::windowFgActive);
+	p.drawText(rect, Qt::AlignCenter, BotInitial(bot));
+}
+
+[[nodiscard]] not_null<Ui::RoundButton*> MakeButton(
+		not_null<QWidget*> parent,
+		const QString &text,
+		const style::RoundButton &st) {
+	const auto result = Ui::CreateChild<Ui::RoundButton>(
+		parent.get(),
+		rpl::single(text),
+		st);
+	result->setTextTransform(Ui::RoundButtonTextTransform::NoTransform);
+	return result;
+}
+
+class CodeHighlighter final : public QSyntaxHighlighter {
+public:
+	explicit CodeHighlighter(QTextDocument *document)
+	: QSyntaxHighlighter(document) {
+	}
+
+protected:
+	void highlightBlock(const QString &text) override {
+		static const auto keywords = QRegularExpression(
+			u"\\b(await|async|break|case|catch|class|const|continue|"
+			"default|delete|do|else|export|extends|false|finally|for|"
+			"function|if|import|in|instanceof|let|new|null|of|return|"
+			"static|super|switch|this|throw|true|try|typeof|undefined|"
+			"var|void|while|yield)\\b"_q);
+		static const auto globals = QRegularExpression(
+			u"\\b(bot|ctx|db|ai|http|Keyboard|console|fetch)\\b"_q);
+		static const auto numbers = QRegularExpression(
+			u"\\b\\d+(\\.\\d+)?\\b"_q);
+		static const auto strings = QRegularExpression(
+			u"(\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'|`(\\\\.|[^`\\\\])*`)"_q);
+		static const auto comment = QRegularExpression(u"//[^\\n]*"_q);
+
+		auto keyword = QTextCharFormat();
+		keyword.setForeground(st::botStudioCodeKeywordFg->c);
+		keyword.setFontWeight(QFont::DemiBold);
+		auto global = QTextCharFormat();
+		global.setForeground(st::botStudioCodeKeywordFg->c);
+		auto number = QTextCharFormat();
+		number.setForeground(st::botStudioCodeNumberFg->c);
+		auto string = QTextCharFormat();
+		string.setForeground(st::botStudioCodeStringFg->c);
+		auto commentFormat = QTextCharFormat();
+		commentFormat.setForeground(st::botStudioCodeCommentFg->c);
+		commentFormat.setFontItalic(true);
+
+		const auto apply = [&](
+				const QRegularExpression &re,
+				const QTextCharFormat &format) {
+			auto i = re.globalMatch(text);
+			while (i.hasNext()) {
+				const auto match = i.next();
+				setFormat(
+					match.capturedStart(),
+					match.capturedLength(),
+					format);
+			}
+		};
+		apply(keywords, keyword);
+		apply(globals, global);
+		apply(numbers, number);
+		apply(strings, string);
+
+		// Block comments, tracked between lines with the block state.
+		auto start = 0;
+		if (previousBlockState() != 1) {
+			start = text.indexOf(u"/*"_q);
+		}
+		setCurrentBlockState(0);
+		while (start >= 0) {
+			const auto end = text.indexOf(u"*/"_q, start);
+			auto length = 0;
+			if (end < 0) {
+				setCurrentBlockState(1);
+				length = text.size() - start;
+			} else {
+				length = end - start + 2;
+			}
+			setFormat(start, length, commentFormat);
+			start = text.indexOf(u"/*"_q, start + length);
+		}
+		auto i = comment.globalMatch(text);
+		while (i.hasNext()) {
+			const auto match = i.next();
+			const auto from = match.capturedStart();
+			// Skip "//" inside strings like 'https://...'.
+			if (format(from).foreground().color()
+				!= st::botStudioCodeStringFg->c) {
+				setFormat(from, text.size() - from, commentFormat);
+				break;
+			}
+		}
+	}
+
+};
+
+[[nodiscard]] not_null<QPlainTextEdit*> CreateCodeView(
+		not_null<QWidget*> parent,
+		bool readOnly,
+		bool highlight) {
+	const auto result = Ui::CreateChild<QPlainTextEdit>(parent.get());
+	result->setFrameShape(QFrame::NoFrame);
+	result->setFont(CodeFont());
+	result->setReadOnly(readOnly);
+	result->setLineWrapMode(readOnly
+		? QPlainTextEdit::WidgetWidth
+		: QPlainTextEdit::NoWrap);
+	result->setTabStopDistance(
+		QFontMetricsF(CodeFont()).horizontalAdvance(u"  "_q));
+	result->document()->setDocumentMargin(st::botStudioEditorPadding.left() * 2);
+	const auto highlighter = highlight
+		? new CodeHighlighter(result->document())
+		: nullptr;
+	const auto updatePalette = [=] {
+		auto palette = result->palette();
+		palette.setColor(QPalette::Base, st::botStudioEditorBg->c);
+		palette.setColor(QPalette::Text, st::windowFg->c);
+		palette.setColor(QPalette::Highlight, st::windowBgActive->c);
+		palette.setColor(QPalette::HighlightedText, st::windowFgActive->c);
+		result->setPalette(palette);
+		result->viewport()->setPalette(palette);
+		if (highlighter) {
+			highlighter->rehighlight();
+		}
+	};
+	updatePalette();
+	style::PaletteChanged(
+	) | rpl::on_next(updatePalette, Ui::CreateChild<Ui::RpWidget>(
+		result)->lifetime());
+	return result;
+}
+
+[[nodiscard]] not_null<Ui::PasswordInput*> AddPasswordRow(
+		not_null<Ui::GenericBox*> box,
+		const QString &placeholder) {
+	const auto wrap = box->addRow(object_ptr<Ui::RpWidget>(box));
+	const auto field = Ui::CreateChild<Ui::PasswordInput>(
+		wrap,
+		st::defaultInputField,
+		rpl::single(placeholder),
+		QString());
+	wrap->resize(wrap->width(), field->height());
+	wrap->widthValue() | rpl::on_next([=](int width) {
+		field->resize(width, field->height());
+		field->moveToLeft(0, 0);
+	}, wrap->lifetime());
+	field->show();
+	return field;
+}
+
+void SetEditorText(not_null<QPlainTextEdit*> editor, const QString &text) {
+	// Keep undo history: replace the content through a cursor.
+	auto cursor = editor->textCursor();
+	cursor.beginEditBlock();
+	cursor.select(QTextCursor::Document);
+	cursor.insertText(text);
+	cursor.endEditBlock();
+	cursor.movePosition(QTextCursor::Start);
+	editor->setTextCursor(cursor);
+}
+
+void DocsBox(not_null<Ui::GenericBox*> box) {
+	box->setTitle(rpl::single(u"Справка Bot Studio"_q));
+	box->setWidth(st::boxWideWidth + st::boxWideWidth / 2);
+	box->setMaxHeight(st::boxMaxListHeight * 2);
+	const auto label = box->addRow(
+		object_ptr<Ui::FlatLabel>(box, QString(), st::boxLabel));
+	label->setSelectable(true);
+	label->setMarkedText(AiAgent::MarkdownToEntities(
+		Runtime::Documentation()));
+	box->addButton(rpl::single(u"Закрыть"_q), [=] { box->closeBox(); });
+}
+
+void TokenBox(
+		not_null<Ui::GenericBox*> box,
+		not_null<Studio*> studio,
+		QString botId) {
+	box->setTitle(rpl::single(u"Сменить токен"_q));
+	box->setWidth(st::boxWideWidth);
+	box->addRow(object_ptr<Ui::FlatLabel>(
+		box,
+		u"Новый токен этого же бота из @BotFather (/token или /revoke)."_q,
+		st::botStudioBoxLabel));
+	const auto field = AddPasswordRow(box, u"Токен бота"_q);
+	const auto error = box->addRow(object_ptr<Ui::FlatLabel>(
+		box,
+		QString(),
+		st::botStudioError));
+	box->setFocusCallback([=] { field->setFocusFast(); });
+	box->addButton(rpl::single(u"Сохранить"_q), [=] {
+		error->setText(u"Проверяю токен…"_q);
+		studio->setToken(botId, field->getLastText(), crl::guard(box, [=](
+				QString text) {
+			if (text.isEmpty()) {
+				box->closeBox();
+			} else {
+				error->setText(text);
+			}
+		}));
+	});
+	box->addButton(rpl::single(u"Отмена"_q), [=] { box->closeBox(); });
+}
+
+void NewBotBox(
+		not_null<Ui::GenericBox*> box,
+		not_null<Window::SessionController*> controller,
+		not_null<Studio*> studio,
+		Fn<void(QString)> created) {
+	box->setTitle(rpl::single(u"Новый бот"_q));
+	box->setWidth(st::boxWideWidth + st::boxWideWidth / 4);
+
+	box->addRow(object_ptr<Ui::FlatLabel>(
+		box,
+		u"Опишите бота — ИИ-агент сам создаст его в @BotFather, напишет "
+		"код и запустит:"_q,
+		st::botStudioBoxLabel));
+	const auto idea = box->addRow(object_ptr<Ui::InputField>(
+		box,
+		st::defaultInputField,
+		Ui::InputField::Mode::MultiLine,
+		rpl::single(u"Например: бот записи в барбершоп с выбором времени"_q)));
+	const auto aiButton = box->addRow(
+		object_ptr<Ui::RoundButton>(
+			box,
+			rpl::single(u"✦ Создать с ИИ-агентом"_q),
+			st::botStudioActionButton),
+		style::al_left);
+	aiButton->setTextTransform(Ui::RoundButtonTextTransform::NoTransform);
+	aiButton->setClickedCallback([=] {
+		const auto text = idea->getLastText().trimmed();
+		if (text.isEmpty()) {
+			idea->showError();
+			return;
+		}
+		box->closeBox();
+		AiAgent::ShowPanel(controller, u"Создай мне Telegram-бота в Bot "
+			"Studio. Идея: "_q + text + u"\nЕсли у меня нет подходящего "
+			"токена, создай нового бота через @BotFather (спроси у меня "
+			"подтверждение имени и username), затем напиши код по справке "
+			"bot_studio_docs, запусти и проверь лог."_q);
+	});
+
+	box->addRow(object_ptr<Ui::FlatLabel>(
+		box,
+		u"Или вручную: получите токен у @BotFather (/newbot) и вставьте "
+		"его сюда."_q,
+		st::botStudioBoxLabel),
+		st::boxRowPadding + QMargins(0, st::boxLittleSkip * 3, 0, 0));
+	const auto botFather = box->addRow(
+		object_ptr<Ui::LinkButton>(box, u"Открыть @BotFather"_q),
+		style::al_left);
+	botFather->setClickedCallback([=] {
+		controller->showPeerByLink(Window::PeerByLinkInfo{
+			.usernameOrId = u"BotFather"_q,
+		});
+		controller->window().activate();
+	});
+	const auto token = AddPasswordRow(box, u"Токен бота: 123456789:AAH…"_q);
+
+	box->addRow(object_ptr<Ui::FlatLabel>(
+		box,
+		u"Шаблон"_q,
+		st::botStudioBoxSection),
+		st::boxRowPadding + QMargins(0, st::boxLittleSkip * 2, 0, 0));
+	const auto chosen = std::make_shared<QString>(Templates().front().id);
+	const auto templates = box->addRow(
+		object_ptr<Ui::VerticalLayout>(box));
+	const auto description = box->addRow(object_ptr<Ui::FlatLabel>(
+		box,
+		Templates().front().description,
+		st::botStudioBoxLabel));
+	const auto rebuild = std::make_shared<Fn<void()>>();
+	*rebuild = [=] {
+		while (templates->count()) {
+			delete templates->widgetAt(0);
+		}
+		auto row = (Ui::RpWidget*)nullptr;
+		auto left = 0;
+		const auto width = st::boxWideWidth
+			+ st::boxWideWidth / 4
+			- st::boxRowPadding.left()
+			- st::boxRowPadding.right();
+		for (const auto &entry : Templates()) {
+			const auto active = (entry.id == *chosen);
+			if (!row) {
+				row = templates->add(object_ptr<Ui::RpWidget>(templates));
+				left = 0;
+			}
+			auto button = MakeButton(
+				row,
+				entry.title,
+				active
+					? st::botStudioTemplateButtonActive
+					: st::botStudioTemplateButton);
+			if (left && left + button->width() > width) {
+				row->resize(width, button->height() + st::boxLittleSkip);
+				row = templates->add(object_ptr<Ui::RpWidget>(templates));
+				left = 0;
+				delete button;
+				button = MakeButton(
+					row,
+					entry.title,
+					active
+						? st::botStudioTemplateButtonActive
+						: st::botStudioTemplateButton);
+			}
+			button->moveToLeft(left, 0);
+			left += button->width() + st::botStudioButtonSkip;
+			row->resize(width, button->height() + st::boxLittleSkip);
+			const auto id = entry.id;
+			const auto about = entry.description;
+			button->setClickedCallback([=] {
+				*chosen = id;
+				description->setText(about);
+				crl::on_main(box, [=] { (*rebuild)(); });
+			});
+		}
+		templates->resizeToWidth(width);
+	};
+	(*rebuild)();
+
+	const auto error = box->addRow(object_ptr<Ui::FlatLabel>(
+		box,
+		QString(),
+		st::botStudioError));
+	box->setFocusCallback([=] { idea->setFocusFast(); });
+	box->addButton(rpl::single(u"Добавить бота"_q), [=] {
+		const auto value = token->getLastText().trimmed();
+		if (value.isEmpty()) {
+			token->showError();
+			return;
+		}
+		error->setText(u"Проверяю токен…"_q);
+		auto code = QString();
+		for (const auto &entry : Templates()) {
+			if (entry.id == *chosen) {
+				code = entry.code;
+			}
+		}
+		studio->create(value, code, crl::guard(box, [=](
+				QString id,
+				QString text) {
+			if (text.isEmpty()) {
+				studio->start(id);
+				created(id);
+				box->closeBox();
+			} else {
+				error->setText(text);
+				if (!id.isEmpty()) {
+					created(id);
+				}
+			}
+		}));
+	});
+	box->addButton(rpl::single(u"Отмена"_q), [=] { box->closeBox(); });
+}
+
+class BotRow final : public Ui::AbstractButton {
+public:
+	BotRow(QWidget *parent, not_null<Studio*> studio, QString id)
+	: AbstractButton(parent)
+	, _studio(studio)
+	, _id(std::move(id)) {
+		resize(width(), st::botStudioRowHeight);
+		setCursor(style::cur_pointer);
+	}
+
+	[[nodiscard]] const QString &id() const {
+		return _id;
+	}
+	void setSelected(bool selected) {
+		if (_selected != selected) {
+			_selected = selected;
+			update();
+		}
+	}
+
+protected:
+	void paintEvent(QPaintEvent *e) override {
+		const auto bot = _studio->bot(_id);
+		if (!bot) {
+			return;
+		}
+		auto p = QPainter(this);
+		auto hq = PainterHighQualityEnabler(p);
+		const auto selected = _selected;
+		if (selected || isOver()) {
+			p.setPen(Qt::NoPen);
+			p.setBrush(selected
+				? st::botStudioRowBgActive
+				: st::botStudioRowBgOver);
+			p.drawRoundedRect(
+				rect(),
+				st::botStudioRowRadius,
+				st::botStudioRowRadius);
+		}
+		const auto &padding = st::botStudioRowPadding;
+		const auto size = st::botStudioAvatarSize;
+		const auto avatar = QRect(
+			padding.left(),
+			(height() - size) / 2,
+			size,
+			size);
+		PaintAvatar(p, avatar, *bot, selected);
+		const auto left = avatar.x() + size + padding.left();
+		const auto available = width() - left - padding.right();
+		p.setPen(selected ? st::botStudioRowFgActive : st::windowBoldFg);
+		p.setFont(st::botStudioRowNameFont);
+		const auto nameFont = style::font(st::botStudioRowNameFont);
+		const auto name = bot->name.isEmpty()
+			? (u"@"_q + bot->username)
+			: bot->name;
+		p.drawText(
+			left,
+			padding.top() + nameFont->ascent + 2,
+			nameFont->elided(name, available));
+
+		const auto status = _studio->status(_id);
+		const auto statusFont = style::font(st::botStudioRowStatusFont);
+		const auto dot = st::botStudioStatusDot;
+		const auto statusTop = height() - padding.bottom() - statusFont->height;
+		p.setPen(Qt::NoPen);
+		p.setBrush(selected ? st::botStudioRowFgActive->c : StatusColor(status));
+		p.drawEllipse(QRect(
+			left,
+			statusTop + (statusFont->height - dot) / 2,
+			dot,
+			dot));
+		p.setFont(statusFont);
+		p.setPen(selected ? st::botStudioRowFgActive : st::windowSubTextFg);
+		p.drawText(
+			left + dot + dot / 2 + 2,
+			statusTop + statusFont->ascent,
+			statusFont->elided(
+				StatusText(status) + u" · @"_q + bot->username,
+				available - dot * 2));
+	}
+
+	void onStateChanged(State was, StateChangeSource source) override {
+		update();
+	}
+
+private:
+	const not_null<Studio*> _studio;
+	const QString _id;
+	bool _selected = false;
+
+};
+
+class BotPage final : public Ui::RpWidget {
+public:
+	BotPage(
+		QWidget *parent,
+		not_null<Window::SessionController*> controller,
+		not_null<Studio*> studio,
+		not_null<Ui::LayerManager*> layers,
+		QString id);
+
+	void focusEditor();
+
+protected:
+	void paintEvent(QPaintEvent *e) override;
+	void resizeEvent(QResizeEvent *e) override;
+
+private:
+	void setupHeader();
+	void setupCode();
+	void setupLogs();
+	void setupData();
+	void updateHeader();
+	void updateGeometry();
+	void showTab(int index);
+	void save();
+	void askAi();
+	void showMenu();
+	void appendLogs(bool reset);
+	void refreshData();
+	[[nodiscard]] bool dirty() const;
+	void updateDirty();
+
+	const not_null<Window::SessionController*> _controller;
+	const not_null<Studio*> _studio;
+	const not_null<Ui::LayerManager*> _layers;
+	const QString _id;
+
+	not_null<Ui::FlatLabel*> _name;
+	not_null<Ui::FlatLabel*> _status;
+	not_null<Ui::RoundButton*> _toggle;
+	not_null<Ui::RoundButton*> _openChat;
+	not_null<Ui::IconButton*> _menuButton;
+	base::unique_qptr<Ui::PopupMenu> _menu;
+	not_null<Ui::SettingsSlider*> _tabs;
+
+	not_null<Ui::RpWidget*> _codeTab;
+	not_null<Ui::RpWidget*> _logsTab;
+	not_null<Ui::RpWidget*> _dataTab;
+
+	Ui::RoundButton *_templates = nullptr;
+	Ui::RoundButton *_docs = nullptr;
+	Ui::RoundButton *_save = nullptr;
+	Ui::FlatLabel *_codeHint = nullptr;
+	QPlainTextEdit *_editor = nullptr;
+	Ui::RpWidget *_aiBar = nullptr;
+	Ui::InputField *_aiField = nullptr;
+	Ui::RoundButton *_aiButton = nullptr;
+
+	Ui::RoundButton *_clearLogs = nullptr;
+	Ui::FlatLabel *_logsHint = nullptr;
+	QPlainTextEdit *_logView = nullptr;
+	size_t _logsShown = 0;
+
+	Ui::RoundButton *_refreshData = nullptr;
+	Ui::RoundButton *_clearData = nullptr;
+	QPlainTextEdit *_dataView = nullptr;
+
+	QString _savedCode;
+	QString _error;
+	int _tab = 0;
+
+};
+
+BotPage::BotPage(
+	QWidget *parent,
+	not_null<Window::SessionController*> controller,
+	not_null<Studio*> studio,
+	not_null<Ui::LayerManager*> layers,
+	QString id)
+: RpWidget(parent)
+, _controller(controller)
+, _studio(studio)
+, _layers(layers)
+, _id(std::move(id))
+, _name(Ui::CreateChild<Ui::FlatLabel>(this, st::botStudioHeaderName))
+, _status(Ui::CreateChild<Ui::FlatLabel>(this, st::botStudioHeaderStatus))
+, _toggle(MakeButton(this, u"Запустить"_q, st::botStudioActionButton))
+, _openChat(MakeButton(this, u"Открыть в Telegram"_q, st::botStudioLightButton))
+, _menuButton(Ui::CreateChild<Ui::IconButton>(this, st::botStudioMenuButton))
+, _tabs(Ui::CreateChild<Ui::SettingsSlider>(this, st::botStudioTabs))
+, _codeTab(Ui::CreateChild<Ui::RpWidget>(this))
+, _logsTab(Ui::CreateChild<Ui::RpWidget>(this))
+, _dataTab(Ui::CreateChild<Ui::RpWidget>(this)) {
+	setupHeader();
+	setupCode();
+	setupLogs();
+	setupData();
+	_tabs->setSections({ u"Код"_q, u"Логи"_q, u"Данные"_q });
+	_tabs->sectionActivated(
+	) | rpl::on_next([=](int index) {
+		showTab(index);
+	}, lifetime());
+	showTab(0);
+
+	_studio->botUpdated(
+	) | rpl::filter(rpl::mappers::_1 == _id) | rpl::on_next([=] {
+		updateHeader();
+		const auto bot = _studio->bot(_id);
+		if (bot && bot->code != _savedCode) {
+			if (!dirty()) {
+				_savedCode = bot->code;
+				SetEditorText(_editor, bot->code);
+			} else {
+				_savedCode = bot->code;
+				updateDirty();
+			}
+		}
+	}, lifetime());
+	_studio->logAdded(
+	) | rpl::filter(rpl::mappers::_1 == _id) | rpl::on_next([=] {
+		appendLogs(false);
+		if (_tab != 1) {
+			updateHeader();
+		}
+	}, lifetime());
+	updateHeader();
+}
+
+void BotPage::setupHeader() {
+	_toggle->setClickedCallback([=] {
+		const auto status = _studio->status(_id);
+		if (status == BotStatus::Running || status == BotStatus::Starting) {
+			_studio->stop(_id);
+		} else {
+			if (dirty()) {
+				save();
+			}
+			_studio->start(_id);
+		}
+	});
+	_openChat->setClickedCallback([=] {
+		if (const auto bot = _studio->bot(_id)) {
+			_controller->showPeerByLink(Window::PeerByLinkInfo{
+				.usernameOrId = bot->username,
+			});
+			_controller->window().activate();
+		}
+	});
+	_menuButton->setClickedCallback([=] { showMenu(); });
+}
+
+void BotPage::setupCode() {
+	const auto tab = _codeTab.get();
+	_templates = MakeButton(tab, u"Шаблоны"_q, st::botStudioSmallButton);
+	_docs = MakeButton(tab, u"Справка по API"_q, st::botStudioSmallButton);
+	_save = MakeButton(tab, u"Сохранить и перезапустить"_q, st::botStudioSmallButton);
+	_codeHint = Ui::CreateChild<Ui::FlatLabel>(
+		tab,
+		QString(),
+		st::botStudioHint);
+	_editor = CreateCodeView(tab, false, true);
+	if (const auto bot = _studio->bot(_id)) {
+		_savedCode = bot->code;
+		_editor->setPlainText(bot->code);
+	}
+	QObject::connect(_editor, &QPlainTextEdit::textChanged, [=] {
+		updateDirty();
+	});
+	const auto shortcut = new QShortcut(
+		QKeySequence::Save,
+		_editor,
+		nullptr,
+		nullptr,
+		Qt::WidgetWithChildrenShortcut);
+	QObject::connect(shortcut, &QShortcut::activated, [=] { save(); });
+
+	_save->setClickedCallback([=] { save(); });
+	_docs->setClickedCallback([=] {
+		_layers->showBox(Box(DocsBox));
+	});
+	_templates->setClickedCallback([=] {
+		_menu = base::make_unique_q<Ui::PopupMenu>(
+			this,
+			st::defaultPopupMenu);
+		for (const auto &entry : Templates()) {
+			const auto code = entry.code;
+			_menu->addAction(entry.title, [=] {
+				SetEditorText(_editor, code);
+				_editor->setFocus();
+			});
+		}
+		_menu->popup(QCursor::pos());
+	});
+
+	_aiBar = Ui::CreateChild<Ui::RpWidget>(tab);
+	_aiField = Ui::CreateChild<Ui::InputField>(
+		_aiBar,
+		st::botStudioAiField,
+		Ui::InputField::Mode::MultiLine,
+		rpl::single(u"Опишите, что изменить в боте, — ИИ-агент перепишет "
+			"код и проверит его"_q));
+	_aiField->setSubmitSettings(Ui::InputField::SubmitSettings::Enter);
+	_aiButton = MakeButton(_aiBar, u"✦ Сделать"_q, st::botStudioAiButton);
+	_aiField->submits() | rpl::on_next([=] { askAi(); }, _aiField->lifetime());
+	_aiButton->setClickedCallback([=] { askAi(); });
+	_aiField->heightChanges(
+	) | rpl::on_next([=] {
+		updateGeometry();
+	}, _aiField->lifetime());
+	_aiBar->paintRequest(
+	) | rpl::on_next([=] {
+		auto p = QPainter(_aiBar);
+		auto hq = PainterHighQualityEnabler(p);
+		p.setPen(Qt::NoPen);
+		p.setBrush(st::aiAgentComposerBg);
+		p.drawRoundedRect(
+			_aiBar->rect(),
+			st::botStudioAiBarRadius,
+			st::botStudioAiBarRadius);
+	}, _aiBar->lifetime());
+	updateDirty();
+}
+
+void BotPage::setupLogs() {
+	const auto tab = _logsTab.get();
+	_clearLogs = MakeButton(tab, u"Очистить"_q, st::botStudioSmallButton);
+	_logsHint = Ui::CreateChild<Ui::FlatLabel>(
+		tab,
+		u"Входящие сообщения, console.log и ошибки бота."_q,
+		st::botStudioHint);
+	_logView = CreateCodeView(tab, true, false);
+	_logView->setMaximumBlockCount(1000);
+	_clearLogs->setClickedCallback([=] {
+		_studio->clearLogs(_id);
+		appendLogs(true);
+	});
+	appendLogs(true);
+}
+
+void BotPage::setupData() {
+	const auto tab = _dataTab.get();
+	_refreshData = MakeButton(tab, u"Обновить"_q, st::botStudioSmallButton);
+	_clearData = MakeButton(tab, u"Очистить данные"_q, st::botStudioSmallButton);
+	_dataView = CreateCodeView(tab, true, false);
+	_refreshData->setClickedCallback([=] { refreshData(); });
+	_clearData->setClickedCallback([=] {
+		_layers->showBox(Ui::MakeConfirmBox({
+			.text = u"Удалить все данные, которые сохранил бот (db, "
+				"сессии, историю ИИ)?"_q,
+			.confirmed = [=](Fn<void()> close) {
+				_studio->clearStorage(_id);
+				refreshData();
+				close();
+			},
+			.confirmText = u"Удалить"_q,
+			.confirmStyle = &st::attentionBoxButton,
+		}));
+	});
+}
+
+void BotPage::refreshData() {
+	const auto raw = _studio->storage(_id);
+	const auto document = QJsonDocument::fromJson(raw);
+	_dataView->setPlainText(document.isNull()
+		? QString::fromUtf8(raw)
+		: QString::fromUtf8(document.toJson(QJsonDocument::Indented)));
+}
+
+void BotPage::appendLogs(bool reset) {
+	const auto &logs = _studio->logs(_id);
+	if (reset || _logsShown > logs.size()) {
+		_logView->clear();
+		_logsShown = 0;
+	}
+	const auto escape = [](const QString &text) {
+		return text.toHtmlEscaped().replace('\n', u"<br>"_q);
+	};
+	for (auto i = _logsShown; i < logs.size(); ++i) {
+		const auto &entry = logs[i];
+		const auto color = [&] {
+			switch (entry.level) {
+			case LogLevel::Error: return ColorName(st::botStudioErrorFg);
+			case LogLevel::Warning: return ColorName(st::botStudioCodeNumberFg);
+			case LogLevel::Incoming: return ColorName(st::windowActiveTextFg);
+			case LogLevel::System: return ColorName(st::windowSubTextFg);
+			case LogLevel::Info: return ColorName(st::windowFg);
+			}
+			return ColorName(st::windowFg);
+		}();
+		const auto prefix = (entry.level == LogLevel::Incoming)
+			? u"→ "_q
+			: (entry.level == LogLevel::Error)
+			? u"✖ "_q
+			: (entry.level == LogLevel::Warning)
+			? u"⚠ "_q
+			: QString();
+		_logView->appendHtml(u"<span style=\"color:%1\">%2</span> "
+			"<span style=\"color:%3\">%4</span>"_q.arg(
+				ColorName(st::windowSubTextFg),
+				entry.when.toString(u"HH:mm:ss"_q),
+				color,
+				escape(prefix + entry.text)));
+	}
+	_logsShown = logs.size();
+}
+
+bool BotPage::dirty() const {
+	return _editor && (_editor->toPlainText() != _savedCode);
+}
+
+void BotPage::updateDirty() {
+	if (!_codeHint) {
+		return;
+	}
+	if (!_error.isEmpty()) {
+		_codeHint->setTextColorOverride(st::botStudioErrorFg->c);
+		_codeHint->setText(_error.section('\n', 0, 0));
+	} else {
+		_codeHint->setTextColorOverride(std::nullopt);
+		_codeHint->setText(dirty()
+			? u"Есть несохранённые изменения · Ctrl+S"_q
+			: u"Бот работает прямо в Agentgram, деплой не нужен"_q);
+	}
+	updateGeometry();
+}
+
+void BotPage::save() {
+	const auto code = _editor->toPlainText();
+	_savedCode = code;
+	_error = _studio->setCode(_id, code);
+	updateDirty();
+}
+
+void BotPage::askAi() {
+	const auto text = _aiField->getLastText().trimmed();
+	const auto bot = _studio->bot(_id);
+	if (text.isEmpty() || !bot) {
+		_aiField->setFocus();
+		return;
+	}
+	if (dirty()) {
+		save();
+	}
+	_aiField->clear();
+	AiAgent::ShowPanel(_controller, u"Bot Studio, бот @%1 (bot: %2). "
+		"Задача: %3\nПосмотри текущий код (bot_studio_get), при "
+		"необходимости справку (bot_studio_docs), обнови код через "
+		"bot_studio_set_code и проверь лог."_q.arg(
+			bot->username,
+			bot->id,
+			text));
+}
+
+void BotPage::showMenu() {
+	_menu = base::make_unique_q<Ui::PopupMenu>(this, st::defaultPopupMenu);
+	_menu->addAction(u"Сменить токен…"_q, [=] {
+		_layers->showBox(Box(TokenBox, _studio, _id));
+	});
+	_menu->addAction(u"Очистить логи"_q, [=] {
+		_studio->clearLogs(_id);
+		appendLogs(true);
+	});
+	_menu->addAction(u"Удалить бота из Bot Studio"_q, [=] {
+		const auto bot = _studio->bot(_id);
+		if (!bot) {
+			return;
+		}
+		_layers->showBox(Ui::MakeConfirmBox({
+			.text = u"Удалить @%1 из Bot Studio вместе с кодом и "
+				"данными? Сам бот в Telegram останется."_q.arg(
+					bot->username),
+			.confirmed = [=](Fn<void()> close) {
+				close();
+				_studio->remove(_id);
+			},
+			.confirmText = u"Удалить"_q,
+			.confirmStyle = &st::attentionBoxButton,
+		}));
+	});
+	_menu->popup(QCursor::pos());
+}
+
+void BotPage::updateHeader() {
+	const auto bot = _studio->bot(_id);
+	if (!bot) {
+		return;
+	}
+	_name->setText(bot->name.isEmpty() ? (u"@"_q + bot->username) : bot->name);
+	const auto status = _studio->status(_id);
+	auto text = u"@"_q + bot->username + u" · "_q + StatusText(status);
+	const auto error = _studio->statusError(_id);
+	if (status == BotStatus::Error && !error.isEmpty()) {
+		text += u": "_q + error;
+	}
+	const auto errors = _studio->errorCount(_id);
+	if (errors > 0 && status == BotStatus::Running) {
+		text += u" · ошибок в логе: %1"_q.arg(errors);
+	}
+	_status->setText(text);
+	_status->setTextColorOverride((status == BotStatus::Error)
+		? std::make_optional(st::botStudioErrorFg->c)
+		: (status == BotStatus::Running)
+		? std::make_optional(st::botStudioRunningFg->c)
+		: std::nullopt);
+	const auto running = (status == BotStatus::Running)
+		|| (status == BotStatus::Starting);
+	_toggle->setText(rpl::single(running
+		? u"■ Остановить"_q
+		: u"▶ Запустить"_q));
+	updateGeometry();
+	update();
+}
+
+void BotPage::showTab(int index) {
+	_tab = index;
+	_codeTab->setVisible(index == 0);
+	_logsTab->setVisible(index == 1);
+	_dataTab->setVisible(index == 2);
+	if (index == 1) {
+		appendLogs(false);
+	} else if (index == 2) {
+		refreshData();
+	}
+	updateGeometry();
+}
+
+void BotPage::focusEditor() {
+	if (_editor) {
+		_editor->setFocus();
+	}
+}
+
+void BotPage::paintEvent(QPaintEvent *e) {
+	auto p = QPainter(this);
+	p.fillRect(e->rect(), st::windowBg);
+	if (const auto bot = _studio->bot(_id)) {
+		const auto &padding = st::botStudioContentPadding;
+		const auto size = st::botStudioHeaderAvatarSize;
+		PaintAvatar(
+			p,
+			QRect(
+				padding.left(),
+				padding.top() + (st::botStudioHeaderHeight - size) / 2,
+				size,
+				size),
+			*bot);
+	}
+}
+
+void BotPage::resizeEvent(QResizeEvent *e) {
+	updateGeometry();
+}
+
+void BotPage::updateGeometry() {
+	const auto &padding = st::botStudioContentPadding;
+	const auto width = this->width();
+	const auto inner = width - padding.left() - padding.right();
+	if (inner <= 0) {
+		return;
+	}
+	const auto headerTop = padding.top();
+	const auto headerHeight = st::botStudioHeaderHeight;
+	const auto avatar = st::botStudioHeaderAvatarSize;
+	auto right = width - padding.right();
+	_menuButton->moveToLeft(
+		right - _menuButton->width(),
+		headerTop + (headerHeight - _menuButton->height()) / 2);
+	right -= _menuButton->width() + st::botStudioButtonSkip;
+	_openChat->moveToLeft(
+		right - _openChat->width(),
+		headerTop + (headerHeight - _openChat->height()) / 2);
+	right -= _openChat->width() + st::botStudioButtonSkip;
+	_toggle->moveToLeft(
+		right - _toggle->width(),
+		headerTop + (headerHeight - _toggle->height()) / 2);
+	right -= _toggle->width() + st::botStudioButtonSkip * 2;
+
+	const auto textLeft = padding.left() + avatar + padding.left() / 2;
+	const auto textWidth = std::max(right - textLeft, 50);
+	_name->resizeToWidth(textWidth);
+	_status->resizeToWidth(textWidth);
+	const auto textHeight = _name->height() + _status->height();
+	const auto textTop = headerTop + (headerHeight - textHeight) / 2;
+	_name->moveToLeft(textLeft, textTop);
+	_status->moveToLeft(textLeft, textTop + _name->height());
+
+	const auto tabsTop = headerTop + headerHeight + st::botStudioTabsSkip;
+	_tabs->resizeToWidth(std::min(inner, 420));
+	_tabs->moveToLeft(padding.left(), tabsTop);
+
+	const auto contentTop = tabsTop + _tabs->height() + st::botStudioTabsSkip;
+	const auto contentHeight = height() - contentTop - padding.bottom();
+	const auto content = QRect(padding.left(), contentTop, inner, contentHeight);
+	for (const auto tab : { _codeTab.get(), _logsTab.get(), _dataTab.get() }) {
+		tab->setGeometry(content);
+	}
+
+	// Code tab.
+	{
+		auto left = 0;
+		_templates->moveToLeft(left, 0);
+		left += _templates->width() + st::botStudioButtonSkip;
+		_docs->moveToLeft(left, 0);
+		left += _docs->width() + st::botStudioButtonSkip;
+		_save->moveToLeft(left, 0);
+		left += _save->width() + st::botStudioButtonSkip * 2;
+		_codeHint->resizeToWidth(std::max(inner - left, 50));
+		_codeHint->moveToLeft(
+			left,
+			(_save->height() - _codeHint->height()) / 2);
+
+		const auto fieldHeight = _aiField->height();
+		const auto barHeight = std::max(
+			fieldHeight,
+			_aiButton->height() + 6);
+		const auto barTop = contentHeight - barHeight;
+		_aiBar->setGeometry(0, barTop, inner, barHeight);
+		const auto buttonLeft = inner - _aiButton->width() - 3;
+		_aiButton->moveToLeft(
+			buttonLeft,
+			(barHeight - _aiButton->height()) / 2);
+		_aiField->resize(buttonLeft - 4, fieldHeight);
+		_aiField->moveToLeft(0, (barHeight - fieldHeight) / 2);
+
+		const auto editorTop = _save->height() + st::botStudioToolbarSkip;
+		_editor->setGeometry(
+			0,
+			editorTop,
+			inner,
+			std::max(barTop - st::botStudioAiBarSkip - editorTop, 40));
+	}
+	// Logs tab.
+	{
+		_clearLogs->moveToLeft(0, 0);
+		const auto left = _clearLogs->width() + st::botStudioButtonSkip * 2;
+		_logsHint->resizeToWidth(std::max(inner - left, 50));
+		_logsHint->moveToLeft(
+			left,
+			(_clearLogs->height() - _logsHint->height()) / 2);
+		const auto top = _clearLogs->height() + st::botStudioToolbarSkip;
+		_logView->setGeometry(0, top, inner, std::max(contentHeight - top, 40));
+	}
+	// Data tab.
+	{
+		_refreshData->moveToLeft(0, 0);
+		_clearData->moveToLeft(
+			_refreshData->width() + st::botStudioButtonSkip,
+			0);
+		const auto top = _refreshData->height() + st::botStudioToolbarSkip;
+		_dataView->setGeometry(0, top, inner, std::max(contentHeight - top, 40));
+	}
+}
+
+class EmptyPage final : public Ui::RpWidget {
+public:
+	EmptyPage(QWidget *parent, Fn<void()> create)
+	: RpWidget(parent)
+	, _title(Ui::CreateChild<Ui::FlatLabel>(
+		this,
+		u"Bot Studio"_q,
+		st::botStudioEmptyTitle))
+	, _text(Ui::CreateChild<Ui::FlatLabel>(
+		this,
+		u"Создавайте Telegram-ботов прямо в Agentgram. Бот работает "
+			"внутри приложения, пока оно открыто: без серверов и деплоя.\n\n"
+			"Опишите идею, и ИИ-агент сам зарегистрирует бота в "
+			"@BotFather, напишет код и запустит его. Или начните с "
+			"шаблона и правьте код вручную."_q,
+		st::botStudioEmptyText))
+	, _button(MakeButton(this, u"＋ Создать бота"_q, st::botStudioActionButton)) {
+		_button->setClickedCallback(std::move(create));
+	}
+
+protected:
+	void paintEvent(QPaintEvent *e) override {
+		auto p = QPainter(this);
+		p.fillRect(e->rect(), st::windowBg);
+		auto hq = PainterHighQualityEnabler(p);
+		const auto size = st::botStudioEmptyIconSize;
+		const auto rect = QRect((width() - size) / 2, _iconTop, size, size);
+		p.setPen(Qt::NoPen);
+		p.setBrush(st::windowBgActive);
+		p.drawEllipse(rect);
+		st::botStudioEmptyIcon.paintInCenter(p, rect);
+	}
+
+	void resizeEvent(QResizeEvent *e) override {
+		const auto textWidth = std::min(width() - 64, 460);
+		_title->resizeToWidth(textWidth);
+		_text->resizeToWidth(textWidth);
+		const auto total = st::botStudioEmptyIconSize
+			+ st::aiAgentEmptyTitleSkip
+			+ _title->height()
+			+ st::aiAgentEmptyTextSkip
+			+ _text->height()
+			+ st::aiAgentSuggestionsSkip
+			+ _button->height();
+		auto top = std::max((height() - total) / 2, 16);
+		_iconTop = top;
+		top += st::botStudioEmptyIconSize + st::aiAgentEmptyTitleSkip;
+		_title->moveToLeft((width() - textWidth) / 2, top);
+		top += _title->height() + st::aiAgentEmptyTextSkip;
+		_text->moveToLeft((width() - textWidth) / 2, top);
+		top += _text->height() + st::aiAgentSuggestionsSkip;
+		_button->moveToLeft((width() - _button->width()) / 2, top);
+	}
+
+private:
+	const not_null<Ui::FlatLabel*> _title;
+	const not_null<Ui::FlatLabel*> _text;
+	const not_null<Ui::RoundButton*> _button;
+	int _iconTop = 0;
+
+};
+
+class StudioWidget final : public Ui::RpWidget {
+public:
+	StudioWidget(
+		QWidget *parent,
+		not_null<Window::SessionController*> controller,
+		not_null<Ui::LayerManager*> layers);
+
+	void selectBot(const QString &id);
+	void createBot();
+
+protected:
+	void paintEvent(QPaintEvent *e) override;
+	void resizeEvent(QResizeEvent *e) override;
+
+private:
+	void rebuildList();
+	void showPage();
+	void updateGeometry();
+
+	const not_null<Window::SessionController*> _controller;
+	const not_null<Studio*> _studio;
+	const not_null<Ui::LayerManager*> _layers;
+	const not_null<Ui::FlatLabel*> _title;
+	const not_null<Ui::FlatLabel*> _subtitle;
+	const not_null<Ui::RoundButton*> _newBot;
+	const not_null<Ui::ScrollArea*> _scroll;
+	const not_null<Ui::VerticalLayout*> _list;
+	std::vector<not_null<BotRow*>> _rows;
+	QString _selected;
+	base::unique_qptr<Ui::RpWidget> _page;
+	QString _pageId;
+
+};
+
+StudioWidget::StudioWidget(
+	QWidget *parent,
+	not_null<Window::SessionController*> controller,
+	not_null<Ui::LayerManager*> layers)
+: RpWidget(parent)
+, _controller(controller)
+, _studio(Studio::Get(&controller->session()))
+, _layers(layers)
+, _title(Ui::CreateChild<Ui::FlatLabel>(
+	this,
+	u"Bot Studio"_q,
+	st::botStudioTitle))
+, _subtitle(Ui::CreateChild<Ui::FlatLabel>(
+	this,
+	u"Боты работают прямо в Agentgram"_q,
+	st::botStudioSubtitle))
+, _newBot(MakeButton(this, u"＋ Новый бот"_q, st::botStudioNewButton))
+, _scroll(Ui::CreateChild<Ui::ScrollArea>(this, st::defaultSolidScroll))
+, _list(_scroll->setOwnedWidget(object_ptr<Ui::VerticalLayout>(_scroll))) {
+	_newBot->setClickedCallback([=] { createBot(); });
+	_studio->botsChanged(
+	) | rpl::on_next([=] {
+		rebuildList();
+		if (!_studio->bot(_selected)) {
+			_selected = _studio->bots().empty()
+				? QString()
+				: _studio->bots().front().id;
+		}
+		showPage();
+	}, lifetime());
+	_studio->botUpdated(
+	) | rpl::on_next([=](const QString &id) {
+		for (const auto row : _rows) {
+			if (row->id() == id) {
+				row->update();
+			}
+		}
+	}, lifetime());
+	rebuildList();
+	if (!_studio->bots().empty()) {
+		_selected = _studio->bots().front().id;
+	}
+	showPage();
+}
+
+void StudioWidget::selectBot(const QString &id) {
+	if (id.isEmpty() || !_studio->bot(id)) {
+		return;
+	}
+	_selected = id;
+	for (const auto row : _rows) {
+		row->setSelected(row->id() == id);
+	}
+	showPage();
+}
+
+void StudioWidget::createBot() {
+	const auto weak = QPointer<StudioWidget>(this);
+	_layers->showBox(Box(NewBotBox, _controller, _studio, [=](QString id) {
+		if (const auto strong = weak.data()) {
+			strong->selectBot(id);
+		}
+	}));
+}
+
+void StudioWidget::rebuildList() {
+	while (_list->count()) {
+		delete _list->widgetAt(0);
+	}
+	_rows.clear();
+	for (const auto &bot : _studio->bots()) {
+		const auto row = _list->add(
+			object_ptr<BotRow>(_list, _studio, bot.id),
+			QMargins(0, 0, 0, 2));
+		row->setSelected(bot.id == _selected);
+		const auto id = bot.id;
+		row->setClickedCallback([=] { selectBot(id); });
+		_rows.push_back(row);
+	}
+	_list->resizeToWidth(_scroll->width());
+}
+
+void StudioWidget::showPage() {
+	const auto id = _studio->bot(_selected) ? _selected : QString();
+	if (_page && _pageId == id) {
+		return;
+	}
+	_pageId = id;
+	for (const auto row : _rows) {
+		row->setSelected(row->id() == id);
+	}
+	if (id.isEmpty()) {
+		const auto weak = QPointer<StudioWidget>(this);
+		_page = base::make_unique_q<EmptyPage>(this, [=] {
+			if (const auto strong = weak.data()) {
+				strong->createBot();
+			}
+		});
+	} else {
+		_page = base::make_unique_q<BotPage>(
+			this,
+			_controller,
+			_studio,
+			_layers,
+			id);
+	}
+	_page->show();
+	updateGeometry();
+}
+
+void StudioWidget::paintEvent(QPaintEvent *e) {
+	auto p = QPainter(this);
+	p.fillRect(
+		QRect(0, 0, st::botStudioSidebarWidth, height()),
+		st::botStudioSidebarBg);
+	p.fillRect(
+		QRect(st::botStudioSidebarWidth, 0, st::lineWidth, height()),
+		st::shadowFg);
+}
+
+void StudioWidget::resizeEvent(QResizeEvent *e) {
+	updateGeometry();
+}
+
+void StudioWidget::updateGeometry() {
+	const auto &padding = st::botStudioSidebarPadding;
+	const auto sidebar = st::botStudioSidebarWidth;
+	const auto inner = sidebar - padding.left() - padding.right();
+	_title->resizeToWidth(inner);
+	_title->moveToLeft(padding.left(), padding.top());
+	_subtitle->resizeToWidth(inner);
+	_subtitle->moveToLeft(padding.left(), _title->y() + _title->height() + 2);
+	_newBot->moveToLeft(
+		padding.left(),
+		_subtitle->y() + _subtitle->height() + st::botStudioNewSkip);
+	const auto listTop = _newBot->y()
+		+ _newBot->height()
+		+ st::botStudioListTop;
+	_scroll->setGeometry(
+		padding.left() / 2,
+		listTop,
+		sidebar - padding.left(),
+		height() - listTop - padding.bottom());
+	_list->resizeToWidth(_scroll->width());
+	if (_page) {
+		_page->setGeometry(
+			sidebar + st::lineWidth,
+			0,
+			width() - sidebar - st::lineWidth,
+			height());
+	}
+}
+
+struct WindowState {
+	std::unique_ptr<Ui::RpWindow> window;
+	std::unique_ptr<Ui::LayerManager> layers;
+	QPointer<StudioWidget> widget;
+};
+
+} // namespace
+
+void ShowWindow(
+		not_null<Window::SessionController*> controller,
+		const QString &botId) {
+	static auto states = base::flat_map<
+		not_null<Main::Session*>,
+		std::unique_ptr<WindowState>>();
+	const auto session = &controller->session();
+	auto i = states.find(session);
+	if (i == end(states)) {
+		i = states.emplace(session, std::make_unique<WindowState>()).first;
+		session->lifetime().add([=] {
+			states.remove(session);
+		});
+	}
+	const auto state = i->second.get();
+	if (!state->window) {
+		state->window = std::make_unique<Ui::RpWindow>();
+		const auto window = state->window.get();
+		window->setWindowTitle(u"Agentgram — Bot Studio"_q);
+		window->setMinimumSize(st::botStudioWindowMinSize);
+		window->setAttribute(Qt::WA_DeleteOnClose, false);
+		state->layers = std::make_unique<Ui::LayerManager>(window->body());
+		const auto widget = Ui::CreateChild<StudioWidget>(
+			window->body().get(),
+			controller,
+			state->layers.get());
+		state->widget = widget;
+		window->body()->sizeValue(
+		) | rpl::on_next([=](QSize size) {
+			widget->setGeometry(QRect(QPoint(), size));
+		}, widget->lifetime());
+		window->events(
+		) | rpl::filter([](not_null<QEvent*> e) {
+			return (e->type() == QEvent::Close);
+		}) | rpl::on_next([=] {
+			crl::on_main(session, [=] {
+				state->widget = nullptr;
+				state->layers = nullptr;
+				state->window = nullptr;
+			});
+		}, window->lifetime());
+		const auto main = controller->widget()->geometry();
+		const auto size = st::botStudioWindowSize;
+		window->setGeometry(QRect(
+			main.x() + (main.width() - size.width()) / 2,
+			main.y() + (main.height() - size.height()) / 2,
+			size.width(),
+			size.height()));
+		window->show();
+	}
+	if (const auto widget = state->widget.data()) {
+		widget->selectBot(botId);
+	}
+	state->window->raise();
+	state->window->activateWindow();
+}
+
+} // namespace BotStudio

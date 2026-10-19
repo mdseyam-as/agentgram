@@ -31,6 +31,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/text_entity.h"
 #include "window/window_session_controller.h"
 
+#ifdef AGENTGRAM_BOT_STUDIO
+#include "bot_studio/bot_studio_agent_tools.h"
+#endif // AGENTGRAM_BOT_STUDIO
+
 #include <QtCore/QJsonDocument>
 
 namespace AiAgent {
@@ -413,6 +417,11 @@ std::vector<ToolDefinition> TelegramTools::definitions() const {
 		fix(u"user_ids"_q);
 		definition.parameters.insert(u"properties"_q, properties);
 	}
+#ifdef AGENTGRAM_BOT_STUDIO
+	for (auto &definition : BotStudio::AgentToolDefinitions()) {
+		result.push_back(std::move(definition));
+	}
+#endif // AGENTGRAM_BOT_STUDIO
 	return result;
 }
 
@@ -443,6 +452,11 @@ ToolPresentation TelegramTools::present(const ToolCall &call) const {
 		return int(ReadIds(args.value(QString::fromLatin1(key))).size());
 	};
 	const auto &name = call.name;
+#ifdef AGENTGRAM_BOT_STUDIO
+	if (BotStudio::IsAgentTool(name)) {
+		return BotStudio::PresentAgentTool(_session, call);
+	}
+#endif // AGENTGRAM_BOT_STUDIO
 	if (name == u"get_context"_q) {
 		return { u"Смотрю текущий контекст"_q };
 	} else if (name == u"list_chats"_q) {
@@ -551,6 +565,12 @@ void TelegramTools::execute(
 	}
 	const auto args = document.object();
 	const auto &name = call.name;
+#ifdef AGENTGRAM_BOT_STUDIO
+	if (BotStudio::IsAgentTool(name)) {
+		BotStudio::ExecuteAgentTool(_session, call, window, std::move(done));
+		return;
+	}
+#endif // AGENTGRAM_BOT_STUDIO
 	if (name == u"get_context"_q) {
 		getContext(window, std::move(done));
 	} else if (name == u"list_chats"_q) {

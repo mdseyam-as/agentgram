@@ -7,6 +7,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "window/window_session_controller.h"
 
+#ifdef AGENTGRAM_BOT_STUDIO
+#include "bot_studio/bot_studio_manager.h"
+#endif // AGENTGRAM_BOT_STUDIO
+
 #include "apiwrap.h"
 #include "api/api_cloud_password.h"
 #include "api/api_text_entities.h"
@@ -1605,6 +1609,10 @@ SessionController::SessionController(
 			Theme::CheckChatThemeWallPaper(this);
 		});
 	}
+#ifdef AGENTGRAM_BOT_STUDIO
+	// Starts the account's Bot Studio bots that are switched on.
+	BotStudio::Studio::Get(session);
+#endif // AGENTGRAM_BOT_STUDIO
 	style::PaletteChanged(
 	) | rpl::on_next([=] {
 		for (auto &[key, value] : _customChatThemes) {

@@ -85,6 +85,7 @@ set(style_files
     editor/editor.style
     statistics/statistics.style
     ai_agent/ai_agent.style
+    bot_studio/bot_studio.style
 )
 
 set(dependent_style_files

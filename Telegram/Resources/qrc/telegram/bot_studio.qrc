@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/bot_studio">
+    <file alias="prelude.js">../../bot_studio/prelude.js</file>
+    <file alias="docs.md">../../bot_studio/docs.md</file>
+  </qresource>
+</RCC>

@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ai_agent/ai_agent_config.h"
 #include "ai_agent/ai_agent_llm.h"
+#include "base/flat_map.h"
 #include "base/flat_set.h"
 #include "base/weak_ptr.h"
 
@@ -98,6 +99,12 @@ public:
 		Fn<void(QStringList models, QString error)> done);
 	void refreshModelsIfStale(const QString &providerId);
 
+	// One-shot answer without tools, used by Bot Studio bots.
+	void complete(
+		QString system,
+		std::vector<ChatMessage> history,
+		Fn<void(QString text, QString error)> done);
+
 private:
 	struct PendingTool {
 		ToolCall call;
@@ -112,6 +119,7 @@ private:
 
 	void step();
 	void stepWithFreshToken();
+	void ensureFreshToken(Fn<void()> ready, Fn<void(QString)> failed);
 	void requestFinished(ChatMessage message);
 	void requestFailed(const QString &error, int status);
 	void runNextTool();
@@ -148,6 +156,9 @@ private:
 
 	std::unique_ptr<OAuthFlow> _oauth;
 	base::flat_set<QString> _modelsLoading;
+
+	base::flat_map<uint64, std::unique_ptr<LlmRequest>> _completions;
+	uint64 _completionId = 0;
 
 };
 

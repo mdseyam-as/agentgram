@@ -8,6 +8,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_main_menu.h"
 
 #include "ai_agent/ai_agent_panel.h"
+#ifdef AGENTGRAM_BOT_STUDIO
+#include "bot_studio/bot_studio_window.h"
+#include "styles/style_bot_studio.h"
+#endif // AGENTGRAM_BOT_STUDIO
 #include "apiwrap.h"
 #include "base/event_filter.h"
 #include "base/qt_signal_producer.h"
@@ -776,6 +780,15 @@ void MainMenu::setupMenu() {
 		controller->window().hideSettingsAndLayer();
 		AiAgent::ShowPanel(controller);
 	});
+#ifdef AGENTGRAM_BOT_STUDIO
+	addAction(
+		rpl::single(u"Bot Studio"_q),
+		{ &st::botStudioMenuIcon }
+	)->setClickedCallback([=] {
+		controller->window().hideSettingsAndLayer();
+		BotStudio::ShowWindow(controller);
+	});
+#endif // AGENTGRAM_BOT_STUDIO
 	addAction(
 		tr::lng_menu_settings(),
 		{ &st::menuIconSettings }

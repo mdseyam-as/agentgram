@@ -1,0 +1,172 @@
+/*
+This file is part of Agentgram, a fork of Telegram Desktop.
+
+For license and copyright information please follow this link:
+https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+*/
+using "ui/basic.style";
+using "ui/widgets/widgets.style";
+using "ui/layers/layers.style";
+using "boxes/boxes.style";
+using "ai_agent/ai_agent.style";
+
+botStudioWindowSize: size(1040px, 700px);
+botStudioWindowMinSize: size(760px, 480px);
+
+botStudioSidebarWidth: 270px;
+botStudioSidebarBg: windowBgOver;
+botStudioSidebarPadding: margins(16px, 18px, 16px, 12px);
+botStudioTitle: FlatLabel(defaultFlatLabel) {
+	textFg: windowBoldFg;
+	style: TextStyle(semiboldTextStyle) {
+		font: font(19px semibold);
+	}
+}
+botStudioSubtitle: FlatLabel(defaultFlatLabel) {
+	minWidth: 100px;
+	textFg: windowSubTextFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(12px);
+	}
+}
+botStudioNewButton: RoundButton(defaultActiveButton) {
+	height: 36px;
+	textTop: 9px;
+	width: -32px;
+	radius: 18px;
+}
+botStudioNewSkip: 14px;
+botStudioListTop: 12px;
+
+botStudioRowHeight: 58px;
+botStudioRowPadding: margins(10px, 8px, 10px, 8px);
+botStudioRowRadius: 10px;
+botStudioRowBgOver: windowBgRipple;
+botStudioRowBgActive: windowBgActive;
+botStudioRowFgActive: windowFgActive;
+botStudioAvatarSize: 40px;
+botStudioRowNameFont: font(14px semibold);
+botStudioRowStatusFont: font(12px);
+botStudioStatusDot: 8px;
+botStudioRunningFg: boxTextFgGood;
+botStudioErrorFg: attentionButtonFg;
+botStudioStoppedFg: windowSubTextFg;
+
+botStudioContentPadding: margins(24px, 16px, 24px, 16px);
+botStudioHeaderHeight: 64px;
+botStudioHeaderAvatarSize: 48px;
+botStudioHeaderName: FlatLabel(defaultFlatLabel) {
+	textFg: windowBoldFg;
+	style: TextStyle(semiboldTextStyle) {
+		font: font(17px semibold);
+	}
+}
+botStudioHeaderStatus: FlatLabel(defaultFlatLabel) {
+	textFg: windowSubTextFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(13px);
+	}
+}
+botStudioActionButton: RoundButton(defaultActiveButton) {
+	height: 34px;
+	textTop: 8px;
+	width: -28px;
+	radius: 17px;
+}
+botStudioLightButton: RoundButton(defaultLightButton) {
+	height: 34px;
+	textTop: 8px;
+	width: -28px;
+	radius: 17px;
+}
+botStudioSmallButton: RoundButton(defaultLightButton) {
+	height: 30px;
+	textTop: 6px;
+	width: -22px;
+	radius: 15px;
+	style: TextStyle(defaultTextStyle) {
+		font: font(13px);
+	}
+}
+botStudioButtonSkip: 8px;
+botStudioMenuButton: IconButton(aiAgentHeaderButton) {
+	icon: icon {{ "title_menu_dots", boxTitleCloseFg }};
+	iconOver: icon {{ "title_menu_dots", boxTitleCloseFgOver }};
+}
+
+botStudioTabs: SettingsSlider(defaultTabsSlider) {
+	height: 40px;
+	barTop: 37px;
+	labelTop: 10px;
+}
+botStudioTabsSkip: 10px;
+botStudioToolbarSkip: 10px;
+
+botStudioEditorRadius: 10px;
+botStudioEditorBg: windowBgOver;
+botStudioEditorPadding: margins(4px, 4px, 4px, 4px);
+botStudioCodeFontSize: 13px;
+botStudioCodeKeywordFg: windowActiveTextFg;
+botStudioCodeStringFg: boxTextFgGood;
+botStudioCodeCommentFg: windowSubTextFg;
+botStudioCodeNumberFg: attentionButtonFg;
+
+botStudioHint: FlatLabel(defaultFlatLabel) {
+	minWidth: 100px;
+	textFg: windowSubTextFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(12px);
+	}
+}
+botStudioError: FlatLabel(botStudioHint) {
+	textFg: attentionButtonFg;
+}
+
+botStudioAiBarSkip: 10px;
+botStudioAiField: InputField(aiAgentField) {
+	heightMin: 40px;
+	heightMax: 120px;
+	textMargins: margins(14px, 10px, 6px, 10px);
+}
+botStudioAiBarRadius: 20px;
+botStudioAiButton: RoundButton(defaultActiveButton) {
+	height: 34px;
+	textTop: 8px;
+	width: -26px;
+	radius: 17px;
+}
+
+botStudioEmptyTitle: FlatLabel(aiAgentEmptyTitle) {
+	style: TextStyle(semiboldTextStyle) {
+		font: font(20px semibold);
+	}
+}
+botStudioEmptyText: FlatLabel(aiAgentEmptyText) {
+	minWidth: 360px;
+}
+botStudioEmptyIcon: icon {{ "agent/sparkle-36x36", windowFgActive }};
+botStudioEmptyIconSize: 72px;
+
+botStudioBoxLabel: FlatLabel(defaultFlatLabel) {
+	minWidth: 320px;
+	textFg: windowSubTextFg;
+}
+botStudioBoxSection: FlatLabel(aiAgentSettingsSection) {
+}
+botStudioTemplateButton: RoundButton(aiAgentModelChip) {
+	height: 30px;
+	textTop: 6px;
+	radius: 15px;
+	style: TextStyle(defaultTextStyle) {
+		font: font(13px);
+	}
+}
+botStudioTemplateButtonActive: RoundButton(aiAgentModelChipActive) {
+	height: 30px;
+	textTop: 6px;
+	radius: 15px;
+	style: TextStyle(defaultTextStyle) {
+		font: font(13px);
+	}
+}
+botStudioMenuIcon: icon {{ "menu/bot", menuIconColor }};
