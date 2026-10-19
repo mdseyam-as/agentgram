@@ -33,6 +33,7 @@ struct FlowState {
 	QString selected;
 	bool dirty = false;
 	Fn<void(bool rebuild)> changed;
+	Fn<void()> selected_changed;
 };
 
 namespace {
@@ -264,6 +265,10 @@ public:
 	FlowCanvas(QWidget *parent, std::shared_ptr<FlowState> state);
 
 	void refresh();
+	void setViewport(QSize size) {
+		_viewport = size;
+		refresh();
+	}
 	[[nodiscard]] QRect nodeRect(const QString &id) const;
 	Fn<void(QPoint)> addRequest;
 	Fn<void(QString, QPoint)> contextRequest;
@@ -286,6 +291,7 @@ private:
 	void paintArrow(QPainter &p, QPoint from, QRect target, bool dashed);
 
 	const std::shared_ptr<FlowState> _state;
+	QSize _viewport;
 	QString _dragging;
 	QPoint _dragStart;
 	QPoint _dragOrigin;
@@ -308,9 +314,8 @@ void FlowCanvas::refresh() {
 		bottom = std::max(bottom, rect.y() + rect.height());
 	}
 	const auto padding = st::botStudioCanvasPadding;
-	const auto parent = parentWidget();
-	const auto minWidth = parent ? parent->width() : 0;
-	const auto minHeight = parent ? parent->height() : 0;
+	const auto minWidth = _viewport.width();
+	const auto minHeight = _viewport.height();
 	resize(
 		std::max(right + padding * 4, minWidth),
 		std::max(bottom + padding * 3, minHeight));
@@ -416,8 +421,9 @@ void FlowCanvas::paintArrow(
 			QPointF(to.x() - loop, to.y()),
 			QPointF(to.x() - 6, to.y()));
 	}
+	const auto back = (to.x() <= from.x());
 	auto pen = QPen(
-		WithAlpha(st::botStudioArrowFg->c, 150),
+		WithAlpha(st::botStudioArrowFg->c, back ? 70 : 150),
 		st::botStudioArrowWidth);
 	if (dashed) {
 		pen.setDashPattern({ 3., 3. });
@@ -426,7 +432,7 @@ void FlowCanvas::paintArrow(
 	p.setBrush(Qt::NoBrush);
 	p.drawPath(path);
 	p.setPen(Qt::NoPen);
-	p.setBrush(WithAlpha(st::botStudioArrowFg->c, 190));
+	p.setBrush(WithAlpha(st::botStudioArrowFg->c, back ? 90 : 190));
 	auto head = QPainterPath(QPointF(to.x(), to.y()));
 	head.lineTo(to.x() - 9, to.y() - 5);
 	head.lineTo(to.x() - 9, to.y() + 5);
@@ -654,7 +660,7 @@ void FlowCanvas::mousePressEvent(QMouseEvent *e) {
 	const auto id = nodeAt(e->pos());
 	if (id != _state->selected) {
 		_state->selected = id;
-		_state->changed(true);
+		_state->selected_changed();
 	}
 	if (!id.isEmpty()) {
 		const auto block = FlowBlock(_state->flow, id);
@@ -713,7 +719,7 @@ void FlowCanvas::contextMenuEvent(QContextMenuEvent *e) {
 	const auto id = nodeAt(e->pos());
 	if (!id.isEmpty() && contextRequest) {
 		_state->selected = id;
-		_state->changed(true);
+		_state->selected_changed();
 		contextRequest(id, e->globalPos());
 	}
 }
@@ -742,6 +748,10 @@ FlowEditor::FlowEditor(
 	_state->selected = _state->flow.value(u"start"_q).toString();
 	_state->changed = [=](bool rebuild) {
 		markChanged(rebuild);
+	};
+	_state->selected_changed = [=] {
+		_canvas->update();
+		rebuildInspector();
 	};
 	_canvas->addRequest = [=](QPoint position) {
 		addBlock(position);
@@ -1161,7 +1171,11 @@ void FlowEditor::rebuildInspector() {
 			const auto mediaKinds = row(object_ptr<Ui::RpWidget>(layout), 6);
 			{
 				auto left = 0;
+				auto top = 0;
 				auto height = 0;
+				const auto maxWidth = st::botStudioInspectorWidth
+					- padding.left()
+					- padding.right();
 				for (const auto &[value, title] : std::vector<std::pair<QString, QString>>{
 						{ u"photo"_q, u"🖼 Фото"_q },
 						{ u"video"_q, u"🎬 Видео"_q },
@@ -1173,9 +1187,13 @@ void FlowEditor::rebuildInspector() {
 						(mediaKind == value)
 							? st::botStudioTemplateButtonActive
 							: st::botStudioTemplateButton);
-					chip->moveToLeft(left, 0);
+					if (left && left + chip->width() > maxWidth) {
+						left = 0;
+						top += chip->height() + 6;
+					}
+					chip->moveToLeft(left, top);
 					left += chip->width() + 4;
-					height = chip->height();
+					height = top + chip->height();
 					const auto chosen = value;
 					chip->setClickedCallback([=] {
 						update([&](QJsonObject &b) {
@@ -1189,7 +1207,7 @@ void FlowEditor::rebuildInspector() {
 						}, true);
 					});
 				}
-				mediaKinds->resize(left, height);
+				mediaKinds->resize(maxWidth, height);
 			}
 			field(
 				u"Ссылка https://… на файл (необязательно)"_q,
@@ -2154,7 +2172,7 @@ void FlowEditor::updateGeometry() {
 	if (_inspector) {
 		_inspector->resizeToWidth(inspectorWidth);
 	}
-	_canvas->refresh();
+	_canvas->setViewport(_canvasScroll->size());
 }
 
 } // namespace BotStudio

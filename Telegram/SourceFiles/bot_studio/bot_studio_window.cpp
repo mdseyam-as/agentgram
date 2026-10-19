@@ -563,8 +563,8 @@ struct TemplateChoice {
 		.id = u"code"_q,
 		.emoji = u"💻"_q,
 		.title = u"Код на JavaScript"_q,
-		.description = u"Для разработчиков: полный контроль, любая логика, "
-			"HTTP-запросы и база данных."_q,
+		.description = u"Для разработчиков: любая логика, HTTP-запросы и "
+			"база данных."_q,
 		.code = Templates().front().code,
 	});
 	return result;
@@ -1462,6 +1462,9 @@ void BotPage::refreshAudience() {
 		}
 	}
 	_leadsTable->resizeColumnsToContents();
+	_leadsTitle->setTextColorOverride(leads.isEmpty()
+		? std::make_optional(st::windowSubTextFg->c)
+		: std::nullopt);
 	_leadsTitle->setText(leads.isEmpty()
 		? u"Заявок пока нет. Включите «Присылать мне ответы клиента» в "
 			"сообщении или добавьте действие «Сохранить заявку»."_q
@@ -1545,8 +1548,7 @@ void BotPage::showBroadcast() {
 		box->setWidth(st::boxWideWidth);
 		box->addRow(object_ptr<Ui::FlatLabel>(
 			box,
-			u"Сообщение получат все, кто писал боту: %1 чел. (кроме "
-				"заблокировавших). Используйте рассылку бережно — "
+			u"Получат все, кто писал боту: %1 чел. Не злоупотребляйте — "
 				"Telegram ограничивает спам."_q.arg(
 					std::max(stats.users - stats.blocked, 0)),
 			st::botStudioBoxLabel));
@@ -1749,7 +1751,7 @@ void BotPage::updateGeometry() {
 
 	const auto contentTop = tabsTop + _tabs->height() + st::botStudioTabsSkip + 4;
 	auto contentBottom = height() - padding.bottom();
-	if (_aiBar->isVisible()) {
+	if (!_aiBar->isHidden()) {
 		const auto fieldHeight = _aiField->height();
 		const auto barHeight = std::max(fieldHeight, _aiButton->height() + 8);
 		_aiBar->setGeometry(

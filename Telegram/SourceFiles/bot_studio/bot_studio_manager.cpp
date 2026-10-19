@@ -93,9 +93,22 @@ constexpr auto kMaxLogText = 4000;
 	}
 	const auto callback = update.value(u"callback_query"_q).toObject();
 	if (!callback.isEmpty()) {
+		// Show the button text, not its internal data.
+		const auto data = callback.value(u"data"_q).toString();
+		auto label = data;
+		const auto keyboard = callback.value(u"message"_q).toObject().value(
+			u"reply_markup"_q).toObject().value(u"inline_keyboard"_q).toArray();
+		for (const auto &row : keyboard) {
+			for (const auto &button : row.toArray()) {
+				const auto object = button.toObject();
+				if (object.value(u"callback_data"_q).toString() == data) {
+					label = object.value(u"text"_q).toString();
+				}
+			}
+		}
 		return UserName(callback.value(u"from"_q).toObject())
 			+ u" нажал кнопку «"_q
-			+ Short(callback.value(u"data"_q).toString(), 40)
+			+ Short(label, 40)
 			+ u"»"_q;
 	}
 	const auto keys = update.keys();
