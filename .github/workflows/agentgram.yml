@@ -83,8 +83,8 @@ jobs:
             !${{ env.LibrariesPath }}\[qQ]t[_-]*
             ${{ env.LibrariesPath }}\cache_keys\*
             !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
-          key: win-x64-libs-${{ env.CACHE_KEY }}-${{ github.run_id }}
-          restore-keys: win-x64-libs-
+          key: win-x64-libs-v3-${{ env.CACHE_KEY }}-${{ github.run_id }}
+          restore-keys: win-x64-libs-v3-
 
       - name: Restore Qt.
         uses: actions/cache/restore@v4
@@ -105,7 +105,7 @@ jobs:
       - name: Free up some disk space.
         if: always()
         shell: bash
-        run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.pc' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/nv-codec-headers/*' ')' -type f ')' -o -empty ')' -delete
+        run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -name '*.pc' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/nv-codec-headers/*' -o -path '*/tdesktop_rust/out/*' ')' -type f ')' -o -empty ')' -delete
 
       - name: Save ThirdParty.
         if: always()
@@ -124,7 +124,7 @@ jobs:
             !${{ env.LibrariesPath }}\[qQ]t[_-]*
             ${{ env.LibrariesPath }}\cache_keys\*
             !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
-          key: win-x64-libs-${{ env.CACHE_KEY }}-${{ github.run_id }}
+          key: win-x64-libs-v3-${{ env.CACHE_KEY }}-${{ github.run_id }}
 
       - name: Save Qt.
         if: always()
@@ -211,8 +211,8 @@ jobs:
             !${{ env.LibrariesPath }}\[qQ]t[_-]*
             ${{ env.LibrariesPath }}\cache_keys\*
             !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
-          key: win-x64-libs-${{ env.CACHE_KEY }}-${{ github.run_id }}
-          restore-keys: win-x64-libs-
+          key: win-x64-libs-v3-${{ env.CACHE_KEY }}-${{ github.run_id }}
+          restore-keys: win-x64-libs-v3-
 
       - name: Restore Qt.
         uses: actions/cache/restore@v4
