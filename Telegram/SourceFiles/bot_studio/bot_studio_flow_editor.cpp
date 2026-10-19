@@ -1097,8 +1097,7 @@ void FlowEditor::rebuildInspector() {
 		const auto notify = static_cast<Ui::Checkbox*>(row(
 			object_ptr<Ui::Checkbox>(
 				layout,
-				u"Присылать мне все ответы клиента, когда он дошёл до "
-					"этого сообщения"_q,
+				u"Присылать мне ответы клиента"_q,
 				block.value(u"notifyOwner"_q).toBool(),
 				st::botStudioCheckbox,
 				st::defaultToggle), 8));
@@ -1107,8 +1106,9 @@ void FlowEditor::rebuildInspector() {
 				b.insert(u"notifyOwner"_q, checked);
 			}, true);
 		}, notify->lifetime());
-		hint(u"Чтобы бот мог вам писать, один раз откройте его в "
-			"Telegram и нажмите /start."_q);
+		hint(u"Когда клиент дойдёт до этого сообщения, бот пришлёт вам в "
+			"Telegram всё, что он ответил. Чтобы бот мог вам писать, один "
+			"раз откройте его и нажмите /start."_q);
 
 		const auto actions = row(object_ptr<Ui::RpWidget>(layout), 18);
 		auto left = 0;
@@ -1203,8 +1203,15 @@ void FlowEditor::showSettings() {
 				const auto line = holder->add(
 					object_ptr<Ui::RpWidget>(holder),
 					QMargins(0, 4, 0, 4));
+				// Wrap the chips to the box width.
+				const auto maxWidth = st::boxWideWidth
+					+ st::boxWideWidth / 3
+					- st::boxRowPadding.left()
+					- st::boxRowPadding.right();
 				auto left = 0;
+				auto top = 0;
 				auto height = 0;
+				auto width = 0;
 				for (const auto &[value, title] : options) {
 					const auto chip = MakeButton(
 						line,
@@ -1212,16 +1219,21 @@ void FlowEditor::showSettings() {
 						(value == current)
 							? st::botStudioTemplateButtonActive
 							: st::botStudioTemplateButton);
-					chip->moveToLeft(left, 0);
+					if (left && left + chip->width() > maxWidth) {
+						left = 0;
+						top += chip->height() + 6;
+					}
+					chip->moveToLeft(left, top);
 					left += chip->width() + 6;
-					height = chip->height();
+					width = std::max(width, left);
+					height = top + chip->height();
 					const auto v = value;
 					chip->setClickedCallback([=] {
 						chosen(v);
 						crl::on_main(box, [=] { (*rebuild)(); });
 					});
 				}
-				line->resize(left, height);
+				line->resize(width, height);
 			};
 
 			addLabel(u"Где показывать кнопки"_q, st::botStudioInspectorSection, 4);

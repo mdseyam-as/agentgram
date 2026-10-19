@@ -63,8 +63,8 @@ namespace {
 
 [[nodiscard]] QColor StatusColor(BotStatus status) {
 	switch (status) {
-	case BotStatus::Running: return st::botStudioRunningFg->c;
-	case BotStatus::Error: return st::botStudioErrorFg->c;
+	case BotStatus::Running: return QColor(0x4f, 0xae, 0x4e);
+	case BotStatus::Error: return st::attentionButtonFg->c;
 	case BotStatus::Starting: return st::windowActiveTextFg->c;
 	case BotStatus::Stopped: return st::botStudioStoppedFg->c;
 	}
@@ -261,6 +261,20 @@ protected:
 		? new CodeHighlighter(result->document())
 		: nullptr;
 	const auto updatePalette = [=] {
+		const auto handle = st::windowSubTextFg->c;
+		auto hover = handle;
+		hover.setAlpha(200);
+		auto idle = handle;
+		idle.setAlpha(110);
+		result->setStyleSheet(uR"(
+QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
+QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
+QScrollBar::handle { background: %1; border-radius: 3px; min-height: 30px; min-width: 30px; }
+QScrollBar::handle:hover { background: %2; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0px; height: 0px; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+QAbstractScrollArea::corner { background: transparent; }
+)"_q.arg(idle.name(QColor::HexArgb), hover.name(QColor::HexArgb)));
 		auto palette = result->palette();
 		palette.setColor(QPalette::Base, st::botStudioEditorBg->c);
 		palette.setColor(QPalette::Text, st::windowFg->c);
