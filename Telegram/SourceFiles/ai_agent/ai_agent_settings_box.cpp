@@ -303,19 +303,23 @@ void FillProvider(
 		}
 	};
 	const auto rebuildChips = [=] {
-		constexpr auto kMaxChips = 24;
+		constexpr auto kMaxChips = 40;
 		flow->clearWidgets();
 		const auto filter = fields->model
 			? fields->model->getLastText().trimmed()
 			: QString();
+		// Filter only while the user types a name that is not in the list,
+		// the selected model itself must not hide the other ones.
 		auto matched = QStringList();
-		for (const auto &model : state->models) {
-			if (filter.isEmpty()
-				|| model.contains(filter, Qt::CaseInsensitive)) {
-				matched.push_back(model);
+		if (!filter.isEmpty() && !state->models.contains(filter)) {
+			for (const auto &model : state->models) {
+				if (model.contains(filter, Qt::CaseInsensitive)) {
+					matched.push_back(model);
+				}
 			}
 		}
-		if (matched.isEmpty() || (matched.size() == 1 && matched.front() == filter)) {
+		const auto filtered = !matched.isEmpty();
+		if (!filtered) {
 			matched = state->models;
 		}
 		for (const auto &model : matched.mid(0, kMaxChips)) {
@@ -330,17 +334,22 @@ void FillProvider(
 			flow->addWidget(chip);
 		}
 		flow->resizeToWidth(flow->width());
+		const auto total = int(state->models.size());
+		const auto shown = std::min(int(matched.size()), kMaxChips);
 		auto text = QString();
 		if (state->loading) {
 			text = u"Загружаю список моделей…"_q;
 		} else if (!state->error.isEmpty()) {
 			text = u"Список моделей не загружен: "_q + state->error.left(160);
-		} else if (matched.size() > kMaxChips) {
-			text = u"Доступно моделей: %1. Введите часть названия, "
-				"чтобы найти нужную."_q.arg(state->models.size());
+		} else if (filtered) {
+			text = u"Найдено моделей: %1 из %2."_q.arg(matched.size()).arg(
+				total);
+		} else if (shown < total) {
+			text = u"Доступно моделей: %1, показаны первые %2. Введите "
+				"часть названия, чтобы найти нужную."_q.arg(total).arg(shown);
 		} else {
 			text = u"Доступно моделей: %1. Нажмите, чтобы выбрать."_q.arg(
-				state->models.size());
+				total);
 		}
 		status->setText(text);
 	};

@@ -15,6 +15,9 @@ namespace {
 
 constexpr auto kAnthropicMaxTokens = 32000;
 constexpr auto kTransferTimeout = 300 * 1000;
+// The ChatGPT backend hides models whose minimal_client_version is newer
+// than the version we report, so report one newer than any real release.
+constexpr auto kCodexModelsClientVersion = "99.0.0";
 
 [[nodiscard]] QJsonObject ParseObject(const QString &json) {
 	const auto document = QJsonDocument::fromJson(json.toUtf8());
@@ -707,6 +710,7 @@ QStringList ParseModels(const QByteArray &body) {
 		int64 created = 0;
 		int priority = 0;
 		int index = 0;
+		bool hidden = false;
 	};
 	const auto document = QJsonDocument::fromJson(body);
 	auto list = QJsonArray();
@@ -734,10 +738,11 @@ QStringList ParseModels(const QByteArray &body) {
 			model.id = value.toString();
 		} else {
 			const auto object = value.toObject();
+			// Models hidden from the Codex picker still work, list them last.
 			const auto visibility = object.value(u"visibility"_q).toString();
-			if (visibility == u"hide"_q || visibility == u"hidden"_q) {
-				continue;
-			}
+			model.hidden = (visibility == u"hide"_q)
+				|| (visibility == u"hidden"_q)
+				|| (visibility == u"none"_q);
 			for (const auto key : { "id", "slug", "model", "name" }) {
 				model.id = object.value(QString::fromLatin1(key)).toString();
 				if (!model.id.isEmpty()) {
@@ -768,6 +773,9 @@ QStringList ParseModels(const QByteArray &body) {
 	} else if (hasCreated) {
 		ranges::stable_sort(models, std::greater<>(), &Model::created);
 	}
+	ranges::stable_partition(models, [](const Model &model) {
+		return !model.hidden;
+	});
 	auto result = QStringList();
 	for (const auto &model : models) {
 		if (!result.contains(model.id)) {
@@ -784,7 +792,8 @@ void FetchModels(
 	const auto path = (settings.format == ApiFormat::Anthropic)
 		? u"/v1/models?limit=1000"_q
 		: (settings.format == ApiFormat::OpenAIResponses)
-		? u"/models?client_version=0.163.0"_q
+		? (u"/models?client_version="_q
+			+ QString::fromLatin1(kCodexModelsClientVersion))
 		: u"/models"_q;
 	auto request = PrepareRequest(settings, path);
 	request.setRawHeader("Accept", "application/json");
