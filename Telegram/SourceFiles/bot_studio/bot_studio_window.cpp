@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ai_agent/ai_agent_markdown.h"
 #include "ai_agent/ai_agent_panel.h"
+#include "base/event_filter.h"
 #include "bot_studio/bot_studio_manager.h"
 #include "main/main_session.h"
 #include "ui/abstract_button.h"
@@ -35,7 +36,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtCore/QJsonDocument>
 #include <QtCore/QRegularExpression>
-#include <QtGui/QShortcut>
 #include <QtGui/QSyntaxHighlighter>
 #include <QtGui/QTextCharFormat>
 #include <QtWidgets/QPlainTextEdit>
@@ -705,13 +705,16 @@ void BotPage::setupCode() {
 	QObject::connect(_editor, &QPlainTextEdit::textChanged, [=] {
 		updateDirty();
 	});
-	const auto shortcut = new QShortcut(
-		QKeySequence::Save,
-		_editor,
-		nullptr,
-		nullptr,
-		Qt::WidgetWithChildrenShortcut);
-	QObject::connect(shortcut, &QShortcut::activated, [=] { save(); });
+	base::install_event_filter(_editor, [=](not_null<QEvent*> e) {
+		if (e->type() == QEvent::KeyPress) {
+			const auto key = static_cast<QKeyEvent*>(e.get());
+			if (key->matches(QKeySequence::Save)) {
+				save();
+				return base::EventFilterResult::Cancel;
+			}
+		}
+		return base::EventFilterResult::Continue;
+	});
 
 	_save->setClickedCallback([=] { save(); });
 	_docs->setClickedCallback([=] {
@@ -853,12 +856,16 @@ void BotPage::updateDirty() {
 	}
 	if (!_error.isEmpty()) {
 		_codeHint->setTextColorOverride(st::botStudioErrorFg->c);
-		_codeHint->setText(_error.section('\n', 0, 0));
+		static const auto line = QRegularExpression(u"bot\\.js:(\\d+)"_q);
+		const auto match = line.match(_error);
+		_codeHint->setText((match.hasMatch()
+			? (u"Строка %1: "_q.arg(match.captured(1)))
+			: QString()) + _error.section('\n', 0, 0));
 	} else {
 		_codeHint->setTextColorOverride(std::nullopt);
 		_codeHint->setText(dirty()
 			? u"Есть несохранённые изменения · Ctrl+S"_q
-			: u"Бот работает прямо в Agentgram, деплой не нужен"_q);
+			: u"Работает прямо в Agentgram, без деплоя"_q);
 	}
 	updateGeometry();
 }
@@ -1301,9 +1308,6 @@ void StudioWidget::paintEvent(QPaintEvent *e) {
 	p.fillRect(
 		QRect(0, 0, st::botStudioSidebarWidth, height()),
 		st::botStudioSidebarBg);
-	p.fillRect(
-		QRect(st::botStudioSidebarWidth, 0, st::lineWidth, height()),
-		st::shadowFg);
 }
 
 void StudioWidget::resizeEvent(QResizeEvent *e) {
