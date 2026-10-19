@@ -55,6 +55,7 @@ private:
 		QString type = QString());
 	void markChanged(bool rebuild);
 	void showSettings();
+	void showProducts();
 
 	const not_null<Studio*> _studio;
 	const not_null<Ui::LayerManager*> _layers;
@@ -63,6 +64,7 @@ private:
 
 	not_null<Ui::RoundButton*> _add;
 	not_null<Ui::RoundButton*> _settings;
+	not_null<Ui::RoundButton*> _products;
 	not_null<Ui::RoundButton*> _save;
 	not_null<Ui::FlatLabel*> _status;
 	not_null<Ui::ScrollArea*> _canvasScroll;

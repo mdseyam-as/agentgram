@@ -56,9 +56,26 @@ deploy. Enabled bots start together with the app.
   variables), *actions* (set a value, add points, notify you, post to a chat or
   channel, send data to a webhook — Make, Zapier, Google Sheets — save a lead).
   Any block can wait N seconds with "typing…" before it.
-* **Audience**: users, active in 7 days, blocked; a table of collected leads
-  with CSV export (opens in Excel); **broadcasts** to every user of the bot.
-* **Templates**: menu & FAQ, lead form, booking, AI assistant, quiz with points,
+* **More blocks**: *random choice* (prize wheels, A/B tests), *operator chat*
+  (the customer writes to the bot, you answer from Telegram with "reply"),
+  conditions on a **channel subscription**, user **tags** and **working
+  hours**; actions to calculate a formula, tag users, **remind later** (drip
+  lessons, abandoned carts), call any API and save a field of its answer.
+  Inputs also take a location or a photo; a pressed button can be saved as an
+  answer.
+* **Shop**: a product list with categories, prices, photos and delivery
+  settings (*🛍 Products*), blocks *catalog* (cards with paging and
+  "add to cart"), *cart* (± quantity, delivery, minimum order) and *order &
+  payment* — pay on delivery, with **Telegram Stars** or by card through any
+  @BotFather payment provider. Orders come to you in Telegram with status
+  buttons (accepted, on the way, done, canceled), the buyer gets a message on
+  every change; `/admin` in the bot shows stats.
+* **Audience**: users, active in 7 days, blocked; tables of leads and
+  **orders** with revenue, status changes and CSV export (opens in Excel);
+  **broadcasts** to every user or only to a tag.
+* **Templates**: online shop, food delivery, paid access for Stars, menu &
+  FAQ, lead form, booking, support with an operator, bonus for a channel
+  subscription, quiz with points, prize wheel, drip course, AI assistant,
   blank.
 * **Build with AI**: describe the bot in plain words — the agent registers it in
   @BotFather (with your confirmation), builds the scheme, starts it and checks

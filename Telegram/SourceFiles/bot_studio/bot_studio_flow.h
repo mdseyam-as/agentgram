@@ -14,9 +14,12 @@ namespace BotStudio {
 // and turned into bot code for the regular runtime:
 // {
 //   start: blockId, buttonsStyle: "inline" | "keyboard",
-//   blocks: [{ id, title, text, photo, x, y, next, notifyOwner,
-//     buttons: [{ text, goto | url }],
-//     input: { enabled, variable, kind: text|phone|number|email, next } }],
+//   blocks: [{ id, type, title, text, media, x, y, next, delay, notifyOwner,
+//     saveChoice, buttons: [{ text, goto | url, value }],
+//     input: { enabled, variable, kind, next }, ... }],
+//   products: [{ id, title, price, category, description, photo, url }],
+//   shop: { currency, delivery, freeFrom, minOrder, ordersChat,
+//     starsRate, providerToken },
 //   commands: [{ command, description, goto }],
 //   keywords: [{ words: "a, b", goto }],
 //   fallback: { mode: start|block|text|ai, goto, text, prompt },
@@ -45,5 +48,7 @@ void SetFlowBlock(QJsonObject &flow, const QJsonObject &block);
 void RemoveFlowBlock(QJsonObject &flow, const QString &id);
 [[nodiscard]] QString NewFlowBlockId(const QJsonObject &flow);
 [[nodiscard]] QString FlowBlockTitle(const QJsonObject &flow, const QString &id);
+// The id the engine uses for a product (its id or, without one, its title).
+[[nodiscard]] QString FlowProductKey(const QJsonObject &product);
 
 } // namespace BotStudio

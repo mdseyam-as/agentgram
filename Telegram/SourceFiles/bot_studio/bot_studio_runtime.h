@@ -66,6 +66,8 @@ public:
 	void dispatch(const QByteArray &update);
 	// {text, photo?, buttons?, html?} to every private chat of the bot.
 	void broadcast(const QByteArray &request);
+	// {type, ...} to a handler registered with bot.onHook(type).
+	void hook(const QByteArray &request);
 
 	// Compiles without running, returns an error text or an empty string.
 	[[nodiscard]] static QString Check(const QString &code);

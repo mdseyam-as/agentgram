@@ -68,6 +68,49 @@ Set it with `bot_studio_set_flow` / `bot_studio_create {flow}`. JSON:
     (bot must be a member/admin), `{kind:"webhook", url}` (POST JSON with the
     user and answers — Make/Zapier/Google Apps Script), `{kind:"save_lead"}`
     (adds the answers to the Leads table in the Audience tab).
+  - more action kinds: `{kind:"calc", variable, value:"{кол} * 250 + 300"}`
+    (arithmetic), `{kind:"tag"|"untag", value:"vip"}` (user tags: used by
+    conditions and broadcasts), `{kind:"remind", value:"1", unit:"min"|"hour"|
+    "day", goto}` (show a block to the user later — drip lessons, abandoned
+    cart), `{kind:"cancel_reminders"}`, `{kind:"request", url, method:"GET"|
+    "POST", variable, path:"data.price"}` (call an API, save a JSON field;
+    `{var}` in the URL is URL-encoded), `{kind:"add_to_cart", product, value}`,
+    `{kind:"clear_cart"}`.
+  - condition `op` also: `member` (value `@channel`: the user is subscribed;
+    the bot must be a channel admin), `tag` (value: tag name), `hours` (value
+    like `пн-пт 9:00-18:00`, `10-22`, `сб,вс` — local time). These ignore
+    `variable`.
+  - `random` — `branches: [{goto, weight}]`: picks a branch at random by
+    weight (prize wheels, A/B tests).
+  - `operator` — live chat with the owner: `text`, `chat` (empty = owner, or
+    a support group @name/id), `endText`, `next` (after the chat ends). User
+    messages are relayed to the owner, the owner answers with Telegram
+    "reply" and the bot copies the answer to the user. /start ends the chat.
+  - Shop: flow-level `products: [{id, title, price, category, description,
+    photo, url}]` and `shop: {currency: "RUB"|"USD"|"EUR"|"KZT"|"UAH"|"BYN"|
+    "UZS"|"XTR" (Telegram Stars), delivery, freeFrom, minOrder, ordersChat,
+    starsRate (price of 1 ⭐ in the shop currency), providerToken}`.
+    - `catalog` — product cards with photo, price, ◀️ ▶️ paging and
+      🛒 add/➖/➕; with several categories and no `category` filter it first
+      shows category buttons. Fields: `text` (header), `category`, `cart`
+      (cart block id), `buttons` (extra, e.g. back to menu).
+    - `cart` — items with ➖/➕, total with delivery; `text`, `emptyText`,
+      `checkout` (block id for "Оформить заказ" — usually name/phone/address
+      inputs, then the order block), `catalog`, `buttons`.
+    - `order` — creates an order from the cart (`{order_id}`, `{order_total}`,
+      `{order_items}`), sends `text`, notifies the owner (or `shop.ordersChat`)
+      with status buttons (accepted/delivering/done/canceled — the buyer gets
+      a message on each change). `payment`: `none` (pay on delivery, then
+      `next`), `stars` (Telegram Stars invoice, then `paid` block after
+      payment), `card` (needs `shop.providerToken` from @BotFather Payments;
+      then `paid`). `empty` = block for an empty cart.
+    - Variables `{cart}`, `{cart_total}`, `{cart_count}`, `{my_orders}` (the
+      user's last orders with statuses). `/admin` in the bot shows the owner
+      stats and recent orders.
+- Input `kind` also: `location` (geo button or a typed address), `photo`
+  (saves file_id; sent to the owner with the lead).
+- Block `saveChoice: "variable"` saves the text (or button `value`) of the
+  pressed button — use it for choices like size, service, time.
 - `notifyOwner` on a message also saves the answers as a lead.
 - Variables also: `{last_message}`, `{date}`, `{time}`.
 - Ids: short latin words. Keep texts friendly; emoji are welcome.
@@ -75,9 +118,15 @@ Set it with `bot_studio_set_flow` / `bot_studio_create {flow}`. JSON:
 ## Audience
 
 Every private chat that writes to a bot is counted (Audience tab:
-users, active in 7 days, blocked, leads with CSV export, broadcast).
-`bot_studio_audience` reads it, `bot_studio_broadcast` sends a message to all
-users (only on the user's request).
+users, active in 7 days, blocked, tags, leads and orders with CSV export,
+revenue, broadcast — to everyone or to a tag). `bot_studio_audience` reads it,
+`bot_studio_broadcast` sends a message to all users or a tag (only on the
+user's request), `bot_studio_order_status` changes an order status.
+
+Templates in the window (good starting points to copy structure from): shop,
+food delivery, paid access for Stars, menu, leads, booking, support with an
+operator, bonus for a channel subscription, quiz, prize wheel, drip course,
+AI assistant.
 
 # JavaScript bots
 

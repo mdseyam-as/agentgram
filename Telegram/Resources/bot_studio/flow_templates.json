@@ -1,541 +1,1741 @@
 [
-  {
-    "id": "menu",
-    "emoji": "📋",
-    "title": "Меню и ответы",
-    "description": "Приветствие и кнопки разделов: цены, адрес, связь. В каждом разделе кнопка «Назад».",
-    "flow": {
-      "version": 1,
-      "start": "welcome",
-      "buttonsStyle": "inline",
-      "blocks": [
-        {
-          "id": "welcome",
-          "title": "Приветствие",
-          "x": 40,
-          "y": 40,
-          "text": "Здравствуйте, {first_name}! 👋\nВыберите, что вас интересует:",
-          "buttons": [
-            {
-              "text": "💳 Цены",
-              "goto": "prices"
-            },
-            {
-              "text": "📍 Адрес",
-              "goto": "address"
-            },
-            {
-              "text": "📞 Связаться с нами",
-              "goto": "contact"
-            }
-          ]
-        },
-        {
-          "id": "prices",
-          "title": "Цены",
-          "x": 360,
-          "y": 0,
-          "text": "Консультация — 1 000 ₽\nПакет из 5 занятий — 4 000 ₽",
-          "buttons": [
-            {
-              "text": "⬅️ Назад",
-              "goto": "welcome"
-            }
-          ]
-        },
-        {
-          "id": "address",
-          "title": "Адрес",
-          "x": 360,
-          "y": 190,
-          "text": "Мы находимся: г. Москва, ул. Примерная, 1.\nРаботаем Пн–Пт 9:00–19:00.",
-          "buttons": [
-            {
-              "text": "⬅️ Назад",
-              "goto": "welcome"
-            }
-          ]
-        },
-        {
-          "id": "contact",
-          "title": "Связаться",
-          "x": 360,
-          "y": 380,
-          "text": "Напишите ваш вопрос одним сообщением — мы ответим в ближайшее время.",
-          "input": {
-            "enabled": true,
-            "variable": "вопрос",
-            "kind": "text",
-            "next": "thanks"
-          }
-        },
-        {
-          "id": "thanks",
-          "title": "Спасибо",
-          "x": 680,
-          "y": 380,
-          "notifyOwner": true,
-          "text": "Спасибо! Мы получили ваш вопрос и скоро ответим.",
-          "buttons": [
-            {
-              "text": "⬅️ В меню",
-              "goto": "welcome"
-            }
-          ]
-        }
-      ],
-      "commands": [
-        {
-          "command": "start",
-          "description": "Главное меню",
-          "goto": "welcome"
-        }
-      ],
-      "keywords": [
-        {
-          "words": "цена, стоимость, сколько",
-          "goto": "prices"
-        },
-        {
-          "words": "адрес, где, как добраться",
-          "goto": "address"
-        }
-      ],
-      "fallback": {
-        "mode": "block",
-        "goto": "welcome"
+ {
+  "id": "shop",
+  "emoji": "🛍",
+  "title": "Интернет-магазин",
+  "description": "Каталог с категориями, корзина, оформление заказа и статусы заказов.",
+  "flow": {
+   "version": 1,
+   "start": "start",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "start",
+     "title": "Главное меню",
+     "x": 40,
+     "y": 40,
+     "text": "👋 Добро пожаловать в наш магазин, {first_name}!\n\nВыберите, что вас интересует:",
+     "buttons": [
+      {
+       "text": "🛍 Каталог",
+       "goto": "catalog"
+      },
+      {
+       "text": "🧺 Корзина",
+       "goto": "cart"
+      },
+      {
+       "text": "📦 Мои заказы",
+       "goto": "myorders"
+      },
+      {
+       "text": "🚚 Доставка и оплата",
+       "goto": "delivery"
+      },
+      {
+       "text": "💬 Связаться с нами",
+       "goto": "support"
       }
-    }
-  },
-  {
-    "id": "leads",
-    "emoji": "📝",
-    "title": "Сбор заявок",
-    "description": "Спрашивает имя, телефон и задачу, затем присылает заявку вам в Telegram.",
-    "flow": {
-      "version": 1,
-      "start": "hello",
-      "buttonsStyle": "inline",
-      "blocks": [
-        {
-          "id": "hello",
-          "title": "Приветствие",
-          "x": 40,
-          "y": 40,
-          "text": "Здравствуйте! Оставьте заявку — это займёт меньше минуты.",
-          "buttons": [
-            {
-              "text": "✍️ Оставить заявку",
-              "goto": "name"
-            }
-          ]
-        },
-        {
-          "id": "name",
-          "title": "Имя",
-          "x": 360,
-          "y": 40,
-          "text": "Как вас зовут?",
-          "input": {
-            "enabled": true,
-            "variable": "имя",
-            "kind": "text",
-            "next": "phone"
-          }
-        },
-        {
-          "id": "phone",
-          "title": "Телефон",
-          "x": 680,
-          "y": 40,
-          "text": "Приятно познакомиться, {имя}! Оставьте номер телефона:",
-          "input": {
-            "enabled": true,
-            "variable": "телефон",
-            "kind": "phone",
-            "next": "task"
-          }
-        },
-        {
-          "id": "task",
-          "title": "Задача",
-          "x": 680,
-          "y": 230,
-          "text": "Коротко опишите, что вам нужно:",
-          "input": {
-            "enabled": true,
-            "variable": "задача",
-            "kind": "text",
-            "next": "done"
-          }
-        },
-        {
-          "id": "done",
-          "title": "Заявка принята",
-          "x": 360,
-          "y": 230,
-          "notifyOwner": true,
-          "text": "Спасибо, {имя}! Заявка принята, мы позвоним на {телефон}.",
-          "buttons": [
-            {
-              "text": "🔁 Новая заявка",
-              "goto": "name"
-            }
-          ]
-        }
-      ],
-      "commands": [
-        {
-          "command": "start",
-          "description": "Оставить заявку",
-          "goto": "hello"
-        }
-      ],
-      "keywords": [],
-      "fallback": {
-        "mode": "block",
-        "goto": "hello"
+     ]
+    },
+    {
+     "id": "catalog",
+     "title": "Каталог",
+     "x": 380,
+     "y": 40,
+     "type": "catalog",
+     "text": "🛍 Выберите категорию:",
+     "cart": "cart",
+     "buttons": [
+      {
+       "text": "⬅️ В меню",
+       "goto": "start"
       }
-    }
-  },
-  {
-    "id": "booking",
-    "emoji": "📅",
-    "title": "Запись на услугу",
-    "description": "Выбор услуги и времени, телефон — запись приходит вам в Telegram.",
-    "flow": {
-      "version": 1,
-      "start": "start",
-      "buttonsStyle": "inline",
-      "blocks": [
-        {
-          "id": "start",
-          "title": "Выбор услуги",
-          "x": 40,
-          "y": 40,
-          "text": "Привет, {first_name}! На какую услугу вас записать?",
-          "buttons": [
-            {
-              "text": "✂️ Стрижка",
-              "goto": "haircut"
-            },
-            {
-              "text": "🧔 Борода",
-              "goto": "beard"
-            },
-            {
-              "text": "💈 Комплекс",
-              "goto": "complex"
-            }
-          ]
-        },
-        {
-          "id": "haircut",
-          "title": "Стрижка",
-          "x": 360,
-          "y": 0,
-          "next": "day",
-          "text": "Стрижка — 1 500 ₽, около 45 минут."
-        },
-        {
-          "id": "beard",
-          "title": "Борода",
-          "x": 360,
-          "y": 170,
-          "next": "day",
-          "text": "Оформление бороды — 900 ₽, около 30 минут."
-        },
-        {
-          "id": "complex",
-          "title": "Комплекс",
-          "x": 360,
-          "y": 340,
-          "next": "day",
-          "text": "Стрижка + борода — 2 200 ₽, около 75 минут."
-        },
-        {
-          "id": "day",
-          "title": "Выбор дня",
-          "x": 680,
-          "y": 170,
-          "text": "Когда вам удобно? Напишите день и время, например: «завтра в 18:00».",
-          "input": {
-            "enabled": true,
-            "variable": "время",
-            "kind": "text",
-            "next": "phone"
-          }
-        },
-        {
-          "id": "phone",
-          "title": "Телефон",
-          "x": 1000,
-          "y": 170,
-          "text": "Оставьте номер телефона для подтверждения:",
-          "input": {
-            "enabled": true,
-            "variable": "телефон",
-            "kind": "phone",
-            "next": "booked"
-          }
-        },
-        {
-          "id": "booked",
-          "title": "Записали",
-          "x": 1000,
-          "y": 360,
-          "notifyOwner": true,
-          "text": "Готово! Ждём вас: {время}. Если планы изменятся — просто напишите сюда.",
-          "buttons": [
-            {
-              "text": "📅 Записаться ещё",
-              "goto": "start"
-            }
-          ]
-        }
-      ],
-      "commands": [
-        {
-          "command": "start",
-          "description": "Записаться",
-          "goto": "start"
-        }
-      ],
-      "keywords": [
-        {
-          "words": "запис, время, свобод",
-          "goto": "start"
-        }
-      ],
-      "fallback": {
-        "mode": "block",
-        "goto": "start"
+     ]
+    },
+    {
+     "id": "cart",
+     "title": "Корзина",
+     "x": 720,
+     "y": 40,
+     "type": "cart",
+     "text": "🧺 Ваша корзина:",
+     "emptyText": "🧺 В корзине пока пусто.",
+     "checkout": "name",
+     "catalog": "catalog",
+     "buttons": [
+      {
+       "text": "⬅️ В меню",
+       "goto": "start"
       }
-    }
-  },
-  {
-    "id": "assistant",
-    "emoji": "🤖",
-    "title": "ИИ-ассистент",
-    "description": "Отвечает на любые вопросы через ИИ, подключённый в Agentgram.",
-    "flow": {
-      "version": 1,
-      "start": "hello",
-      "buttonsStyle": "inline",
-      "blocks": [
-        {
-          "id": "hello",
-          "title": "Приветствие",
-          "x": 40,
-          "y": 40,
-          "text": "Привет, {first_name}! Я ИИ-помощник. Задайте любой вопрос 🙂"
-        }
-      ],
-      "commands": [
-        {
-          "command": "start",
-          "description": "Начать",
-          "goto": "hello"
-        }
-      ],
-      "keywords": [],
-      "fallback": {
-        "mode": "ai",
-        "prompt": "Ты дружелюбный помощник в Telegram. Отвечай кратко, по делу и на языке пользователя. Не используй Markdown."
+     ]
+    },
+    {
+     "id": "name",
+     "title": "Имя",
+     "x": 1060,
+     "y": 40,
+     "text": "📝 Оформляем заказ.\n\nКак к вам обращаться?",
+     "input": {
+      "enabled": true,
+      "variable": "имя",
+      "kind": "text",
+      "next": "phone"
+     }
+    },
+    {
+     "id": "phone",
+     "title": "Телефон",
+     "x": 1060,
+     "y": 230,
+     "text": "{имя}, оставьте номер телефона для связи:",
+     "input": {
+      "enabled": true,
+      "variable": "телефон",
+      "kind": "phone",
+      "next": "address"
+     }
+    },
+    {
+     "id": "address",
+     "title": "Адрес",
+     "x": 1060,
+     "y": 420,
+     "text": "📍 Куда доставить заказ? Напишите адрес или отправьте геопозицию.",
+     "input": {
+      "enabled": true,
+      "variable": "адрес",
+      "kind": "location",
+      "next": "order"
+     }
+    },
+    {
+     "id": "order",
+     "title": "Заказ оформлен",
+     "x": 720,
+     "y": 420,
+     "type": "order",
+     "payment": "none",
+     "text": "🎉 Спасибо, {имя}! Заказ №{order_id} на {order_total} принят.\n\n{order_items}\n\nМы позвоним на {телефон}, чтобы подтвердить заказ.",
+     "buttons": [
+      {
+       "text": "⬅️ В меню",
+       "goto": "start"
       }
-    }
-  },
-  {
-    "id": "quiz",
-    "emoji": "🎯",
-    "title": "Квиз с баллами",
-    "description": "Вопросы с вариантами, подсчёт баллов и разный итог по результату.",
-    "flow": {
-      "version": 1,
-      "start": "intro",
-      "buttonsStyle": "inline",
-      "blocks": [
-        {
-          "id": "intro",
-          "title": "Начало",
-          "x": 0,
-          "y": 160,
-          "text": "Привет, {first_name}! Ответьте на 2 вопроса и узнайте свой результат 🎯",
-          "buttons": [
-            {
-              "text": "🚀 Начать",
-              "goto": "reset"
-            }
-          ]
-        },
-        {
-          "id": "reset",
-          "type": "action",
-          "title": "Обнулить баллы",
-          "x": 320,
-          "y": 160,
-          "actions": [
-            {
-              "kind": "set",
-              "variable": "баллы",
-              "value": "0"
-            }
-          ],
-          "next": "q1"
-        },
-        {
-          "id": "q1",
-          "title": "Вопрос 1",
-          "x": 640,
-          "y": 160,
-          "text": "1/2. Какая планета ближе всего к Солнцу?",
-          "buttons": [
-            {
-              "text": "Меркурий",
-              "goto": "q1_ok"
-            },
-            {
-              "text": "Венера",
-              "goto": "q2"
-            },
-            {
-              "text": "Марс",
-              "goto": "q2"
-            }
-          ]
-        },
-        {
-          "id": "q1_ok",
-          "type": "action",
-          "title": "+1 балл",
-          "x": 960,
-          "y": 40,
-          "actions": [
-            {
-              "kind": "increment",
-              "variable": "баллы",
-              "value": "1"
-            }
-          ],
-          "next": "q2"
-        },
-        {
-          "id": "q2",
-          "title": "Вопрос 2",
-          "x": 960,
-          "y": 220,
-          "text": "2/2. Сколько секунд в одной минуте?",
-          "buttons": [
-            {
-              "text": "60",
-              "goto": "q2_ok"
-            },
-            {
-              "text": "100",
-              "goto": "result"
-            }
-          ]
-        },
-        {
-          "id": "q2_ok",
-          "type": "action",
-          "title": "+1 балл",
-          "x": 1280,
-          "y": 100,
-          "actions": [
-            {
-              "kind": "increment",
-              "variable": "баллы",
-              "value": "1"
-            }
-          ],
-          "next": "result"
-        },
-        {
-          "id": "result",
-          "type": "condition",
-          "title": "Проверка результата",
-          "x": 1280,
-          "y": 300,
-          "conditions": [
-            {
-              "variable": "баллы",
-              "op": "gt",
-              "value": "1",
-              "goto": "win"
-            }
-          ],
-          "else": "lose"
-        },
-        {
-          "id": "win",
-          "title": "Отлично",
-          "x": 1600,
-          "y": 220,
-          "text": "🏆 Отлично! Вы набрали {баллы} из 2.",
-          "buttons": [
-            {
-              "text": "🔁 Ещё раз",
-              "goto": "reset"
-            }
-          ]
-        },
-        {
-          "id": "lose",
-          "title": "Можно лучше",
-          "x": 1600,
-          "y": 420,
-          "text": "Вы набрали {баллы} из 2. Попробуйте ещё раз!",
-          "buttons": [
-            {
-              "text": "🔁 Ещё раз",
-              "goto": "reset"
-            }
-          ]
-        }
-      ],
-      "commands": [
-        {
-          "command": "start",
-          "description": "Начать квиз",
-          "goto": "intro"
-        }
-      ],
-      "keywords": [],
-      "fallback": {
-        "mode": "start"
+     ]
+    },
+    {
+     "id": "myorders",
+     "title": "Мои заказы",
+     "x": 380,
+     "y": 300,
+     "text": "📦 Ваши последние заказы:\n\n{my_orders}",
+     "buttons": [
+      {
+       "text": "🛍 Каталог",
+       "goto": "catalog"
+      },
+      {
+       "text": "⬅️ В меню",
+       "goto": "start"
       }
-    }
-  },
-  {
-    "id": "blank",
-    "emoji": "✨",
-    "title": "С чистого листа",
-    "description": "Один стартовый блок — соберите бота сами.",
-    "flow": {
-      "version": 1,
-      "start": "start",
-      "buttonsStyle": "inline",
-      "blocks": [
-        {
-          "id": "start",
-          "title": "Старт",
-          "x": 40,
-          "y": 40,
-          "text": "Привет, {first_name}!"
-        }
-      ],
-      "commands": [
-        {
-          "command": "start",
-          "description": "Начать",
-          "goto": "start"
-        }
-      ],
-      "keywords": [],
-      "fallback": {
-        "mode": "start"
+     ]
+    },
+    {
+     "id": "delivery",
+     "title": "Доставка и оплата",
+     "x": 380,
+     "y": 480,
+     "text": "🚚 Доставка по городу — 300 ₽, бесплатно от 3 000 ₽.\n💳 Оплата курьеру наличными или картой.\n⏱ Привозим в течение дня.",
+     "buttons": [
+      {
+       "text": "🛍 Каталог",
+       "goto": "catalog"
+      },
+      {
+       "text": "⬅️ В меню",
+       "goto": "start"
       }
+     ]
+    },
+    {
+     "id": "support",
+     "title": "Связь с нами",
+     "x": 40,
+     "y": 420,
+     "type": "operator",
+     "text": "💬 Напишите ваш вопрос — менеджер ответит прямо здесь.",
+     "next": "start"
     }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Главное меню",
+     "goto": "start"
+    },
+    {
+     "command": "catalog",
+     "description": "Каталог",
+     "goto": "catalog"
+    },
+    {
+     "command": "cart",
+     "description": "Корзина",
+     "goto": "cart"
+    },
+    {
+     "command": "orders",
+     "description": "Мои заказы",
+     "goto": "myorders"
+    }
+   ],
+   "keywords": [
+    {
+     "words": "каталог, товары, купить",
+     "goto": "catalog"
+    },
+    {
+     "words": "корзина",
+     "goto": "cart"
+    },
+    {
+     "words": "доставка, оплата",
+     "goto": "delivery"
+    }
+   ],
+   "fallback": {
+    "mode": "block",
+    "goto": "start"
+   },
+   "shop": {
+    "currency": "RUB",
+    "delivery": 300,
+    "freeFrom": 3000
+   },
+   "products": [
+    {
+     "id": "tshirt",
+     "title": "Футболка «Базовая»",
+     "price": 1290,
+     "category": "👕 Одежда",
+     "description": "Хлопок 100%, размеры S–XXL. Белая, чёрная, серая."
+    },
+    {
+     "id": "hoodie",
+     "title": "Худи оверсайз",
+     "price": 3490,
+     "category": "👕 Одежда",
+     "description": "Тёплое худи с капюшоном, плотный футер."
+    },
+    {
+     "id": "cap",
+     "title": "Кепка",
+     "price": 890,
+     "category": "👕 Одежда",
+     "description": "Регулируемый размер, вышитый логотип."
+    },
+    {
+     "id": "mug",
+     "title": "Кружка 350 мл",
+     "price": 590,
+     "category": "🎁 Аксессуары",
+     "description": "Керамика, можно в посудомойку."
+    },
+    {
+     "id": "bag",
+     "title": "Шопер",
+     "price": 790,
+     "category": "🎁 Аксессуары",
+     "description": "Плотный хлопок, длинные ручки."
+    },
+    {
+     "id": "stickers",
+     "title": "Набор стикеров",
+     "price": 250,
+     "category": "🎁 Аксессуары",
+     "description": "12 виниловых стикеров."
+    }
+   ]
   }
+ },
+ {
+  "id": "food",
+  "emoji": "🍕",
+  "title": "Доставка еды",
+  "description": "Меню по разделам, корзина, часы работы, адрес и заказ курьеру.",
+  "flow": {
+   "version": 1,
+   "start": "start",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "start",
+     "title": "Приветствие",
+     "x": 40,
+     "y": 40,
+     "text": "🍕 Привет, {first_name}! Горячая пицца и роллы с доставкой за 45 минут.",
+     "buttons": [
+      {
+       "text": "📖 Меню",
+       "goto": "menu"
+      },
+      {
+       "text": "🧺 Корзина",
+       "goto": "cart"
+      },
+      {
+       "text": "📦 Мои заказы",
+       "goto": "myorders"
+      },
+      {
+       "text": "🕙 Часы работы",
+       "goto": "hours"
+      }
+     ]
+    },
+    {
+     "id": "menu",
+     "title": "Меню",
+     "x": 380,
+     "y": 40,
+     "type": "catalog",
+     "text": "📖 Что будете заказывать?",
+     "cart": "cart",
+     "buttons": [
+      {
+       "text": "⬅️ Назад",
+       "goto": "start"
+      }
+     ]
+    },
+    {
+     "id": "cart",
+     "title": "Корзина",
+     "x": 720,
+     "y": 40,
+     "type": "cart",
+     "text": "🧺 Ваш заказ:",
+     "emptyText": "🧺 Корзина пуста — загляните в меню.",
+     "checkout": "open",
+     "catalog": "menu",
+     "buttons": [
+      {
+       "text": "⬅️ Назад",
+       "goto": "start"
+      }
+     ]
+    },
+    {
+     "id": "open",
+     "title": "Работаем?",
+     "x": 1060,
+     "y": 40,
+     "type": "condition",
+     "conditions": [
+      {
+       "op": "hours",
+       "value": "10:00-23:00",
+       "goto": "phone"
+      }
+     ],
+     "else": "closed"
+    },
+    {
+     "id": "closed",
+     "title": "Закрыто",
+     "x": 1400,
+     "y": 40,
+     "text": "😴 Мы принимаем заказы с 10:00 до 23:00. Возвращайтесь утром — корзина сохранится!",
+     "buttons": [
+      {
+       "text": "⬅️ В начало",
+       "goto": "start"
+      }
+     ]
+    },
+    {
+     "id": "phone",
+     "title": "Телефон",
+     "x": 1060,
+     "y": 220,
+     "text": "📱 Оставьте номер телефона для курьера:",
+     "input": {
+      "enabled": true,
+      "variable": "телефон",
+      "kind": "phone",
+      "next": "address"
+     }
+    },
+    {
+     "id": "address",
+     "title": "Адрес",
+     "x": 1060,
+     "y": 400,
+     "text": "📍 Отправьте геопозицию или напишите адрес (улица, дом, квартира):",
+     "input": {
+      "enabled": true,
+      "variable": "адрес",
+      "kind": "location",
+      "next": "comment"
+     }
+    },
+    {
+     "id": "comment",
+     "title": "Комментарий",
+     "x": 1060,
+     "y": 580,
+     "text": "✍️ Комментарий к заказу (код домофона, сдача) или «нет»:",
+     "input": {
+      "enabled": true,
+      "variable": "комментарий",
+      "kind": "text",
+      "next": "order"
+     }
+    },
+    {
+     "id": "order",
+     "title": "Заказ принят",
+     "x": 720,
+     "y": 580,
+     "type": "order",
+     "payment": "none",
+     "text": "✅ Заказ №{order_id} на {order_total} принят!\n\n{order_items}\n\nКурьер привезёт его по адресу: {адрес}. Оплата при получении.",
+     "buttons": [
+      {
+       "text": "🍕 Заказать ещё",
+       "goto": "menu"
+      }
+     ]
+    },
+    {
+     "id": "myorders",
+     "title": "Мои заказы",
+     "x": 380,
+     "y": 330,
+     "text": "📦 Ваши заказы:\n\n{my_orders}",
+     "buttons": [
+      {
+       "text": "⬅️ Назад",
+       "goto": "start"
+      }
+     ]
+    },
+    {
+     "id": "hours",
+     "title": "Часы работы",
+     "x": 380,
+     "y": 500,
+     "text": "🕙 Ежедневно с 10:00 до 23:00.\n🚚 Доставка 150 ₽, бесплатно от 1 500 ₽.\nМинимальный заказ — 700 ₽.",
+     "buttons": [
+      {
+       "text": "📖 Меню",
+       "goto": "menu"
+      }
+     ]
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Начало",
+     "goto": "start"
+    },
+    {
+     "command": "menu",
+     "description": "Меню",
+     "goto": "menu"
+    },
+    {
+     "command": "cart",
+     "description": "Корзина",
+     "goto": "cart"
+    }
+   ],
+   "keywords": [
+    {
+     "words": "меню, пицца, роллы, заказать",
+     "goto": "menu"
+    }
+   ],
+   "fallback": {
+    "mode": "block",
+    "goto": "start"
+   },
+   "shop": {
+    "currency": "RUB",
+    "delivery": 150,
+    "freeFrom": 1500,
+    "minOrder": 700
+   },
+   "products": [
+    {
+     "id": "margarita",
+     "title": "Пицца Маргарита 30 см",
+     "price": 590,
+     "category": "🍕 Пицца",
+     "description": "Томатный соус, моцарелла, базилик."
+    },
+    {
+     "id": "pepperoni",
+     "title": "Пицца Пепперони 30 см",
+     "price": 690,
+     "category": "🍕 Пицца",
+     "description": "Пепперони, моцарелла, томатный соус."
+    },
+    {
+     "id": "four",
+     "title": "Четыре сыра 30 см",
+     "price": 750,
+     "category": "🍕 Пицца",
+     "description": "Моцарелла, пармезан, дорблю, чеддер."
+    },
+    {
+     "id": "phila",
+     "title": "Ролл Филадельфия",
+     "price": 520,
+     "category": "🍣 Роллы",
+     "description": "Лосось, сливочный сыр, огурец. 8 шт."
+    },
+    {
+     "id": "california",
+     "title": "Ролл Калифорния",
+     "price": 450,
+     "category": "🍣 Роллы",
+     "description": "Краб, авокадо, икра тобико. 8 шт."
+    },
+    {
+     "id": "cola",
+     "title": "Кола 0,5 л",
+     "price": 120,
+     "category": "🥤 Напитки"
+    },
+    {
+     "id": "juice",
+     "title": "Сок апельсиновый 1 л",
+     "price": 190,
+     "category": "🥤 Напитки"
+    }
+   ]
+  }
+ },
+ {
+  "id": "paid",
+  "emoji": "💎",
+  "title": "Платный доступ",
+  "description": "Продажа гайда, курса или доступа за звёзды Telegram.",
+  "flow": {
+   "version": 1,
+   "start": "start",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "start",
+     "title": "Описание",
+     "x": 40,
+     "y": 40,
+     "text": "💎 Гайд «Продажи в Telegram с нуля»\n\n• 40 страниц практики\n• шаблоны постов и воронок\n• разбор 10 кейсов\n\nСтоимость — 150 ⭐",
+     "buttons": [
+      {
+       "text": "⭐ Купить за 150 ⭐",
+       "goto": "buy"
+      },
+      {
+       "text": "❓ Что внутри",
+       "goto": "about"
+      }
+     ]
+    },
+    {
+     "id": "about",
+     "title": "Что внутри",
+     "x": 40,
+     "y": 300,
+     "text": "📖 Внутри: как упаковать канал, где искать клиентов, как писать продающие посты и настраивать ботов.",
+     "buttons": [
+      {
+       "text": "⭐ Купить",
+       "goto": "buy"
+      },
+      {
+       "text": "⬅️ Назад",
+       "goto": "start"
+      }
+     ]
+    },
+    {
+     "id": "buy",
+     "title": "В корзину",
+     "x": 380,
+     "y": 40,
+     "type": "action",
+     "actions": [
+      {
+       "kind": "clear_cart"
+      },
+      {
+       "kind": "add_to_cart",
+       "product": "guide",
+       "value": "1"
+      }
+     ],
+     "next": "pay"
+    },
+    {
+     "id": "pay",
+     "title": "Счёт",
+     "x": 720,
+     "y": 40,
+     "type": "order",
+     "payment": "stars",
+     "text": "Отлично! Оплатите по кнопке ниже 👇",
+     "paid": "thanks"
+    },
+    {
+     "id": "thanks",
+     "title": "После оплаты",
+     "x": 720,
+     "y": 260,
+     "type": "action",
+     "actions": [
+      {
+       "kind": "tag",
+       "value": "покупатель"
+      }
+     ],
+     "next": "access"
+    },
+    {
+     "id": "access",
+     "title": "Доступ",
+     "x": 1060,
+     "y": 260,
+     "text": "✅ Оплата получена, спасибо!\n\nВаш гайд: https://example.com/guide.pdf\n\nВопросы — пишите сюда в любое время.",
+     "buttons": [
+      {
+       "text": "📥 Открыть гайд",
+       "url": "https://example.com/guide.pdf"
+      }
+     ]
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Начало",
+     "goto": "start"
+    },
+    {
+     "command": "buy",
+     "description": "Купить",
+     "goto": "buy"
+    }
+   ],
+   "keywords": [],
+   "fallback": {
+    "mode": "block",
+    "goto": "start"
+   },
+   "shop": {
+    "currency": "XTR"
+   },
+   "products": [
+    {
+     "id": "guide",
+     "title": "Гайд «Продажи в Telegram»",
+     "price": 150,
+     "description": "PDF-гайд, 40 страниц."
+    }
+   ]
+  }
+ },
+ {
+  "id": "menu",
+  "emoji": "📋",
+  "title": "Меню и ответы",
+  "description": "Приветствие и разделы: цены, адрес, связь, кнопка «Назад».",
+  "flow": {
+   "version": 1,
+   "start": "welcome",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "welcome",
+     "title": "Приветствие",
+     "x": 40,
+     "y": 40,
+     "text": "Здравствуйте, {first_name}! 👋\nВыберите, что вас интересует:",
+     "buttons": [
+      {
+       "text": "💳 Цены",
+       "goto": "prices"
+      },
+      {
+       "text": "📍 Адрес",
+       "goto": "address"
+      },
+      {
+       "text": "📞 Связаться с нами",
+       "goto": "contact"
+      }
+     ]
+    },
+    {
+     "id": "prices",
+     "title": "Цены",
+     "x": 360,
+     "y": 0,
+     "text": "Консультация — 1 000 ₽\nПакет из 5 занятий — 4 000 ₽",
+     "buttons": [
+      {
+       "text": "⬅️ Назад",
+       "goto": "welcome"
+      }
+     ]
+    },
+    {
+     "id": "address",
+     "title": "Адрес",
+     "x": 360,
+     "y": 190,
+     "text": "Мы находимся: г. Москва, ул. Примерная, 1.\nРаботаем Пн–Пт 9:00–19:00.",
+     "buttons": [
+      {
+       "text": "⬅️ Назад",
+       "goto": "welcome"
+      }
+     ]
+    },
+    {
+     "id": "contact",
+     "title": "Связаться",
+     "x": 360,
+     "y": 380,
+     "text": "Напишите ваш вопрос одним сообщением — мы ответим в ближайшее время.",
+     "input": {
+      "enabled": true,
+      "variable": "вопрос",
+      "kind": "text",
+      "next": "thanks"
+     }
+    },
+    {
+     "id": "thanks",
+     "title": "Спасибо",
+     "x": 680,
+     "y": 380,
+     "notifyOwner": true,
+     "text": "Спасибо! Мы получили ваш вопрос и скоро ответим.",
+     "buttons": [
+      {
+       "text": "⬅️ В меню",
+       "goto": "welcome"
+      }
+     ]
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Главное меню",
+     "goto": "welcome"
+    }
+   ],
+   "keywords": [
+    {
+     "words": "цена, стоимость, сколько",
+     "goto": "prices"
+    },
+    {
+     "words": "адрес, где, как добраться",
+     "goto": "address"
+    }
+   ],
+   "fallback": {
+    "mode": "block",
+    "goto": "welcome"
+   }
+  }
+ },
+ {
+  "id": "leads",
+  "emoji": "📝",
+  "title": "Сбор заявок",
+  "description": "Спрашивает имя, телефон и задачу, затем присылает заявку вам в Telegram.",
+  "flow": {
+   "version": 1,
+   "start": "hello",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "hello",
+     "title": "Приветствие",
+     "x": 40,
+     "y": 40,
+     "text": "Здравствуйте! Оставьте заявку — это займёт меньше минуты.",
+     "buttons": [
+      {
+       "text": "✍️ Оставить заявку",
+       "goto": "name"
+      }
+     ]
+    },
+    {
+     "id": "name",
+     "title": "Имя",
+     "x": 360,
+     "y": 40,
+     "text": "Как вас зовут?",
+     "input": {
+      "enabled": true,
+      "variable": "имя",
+      "kind": "text",
+      "next": "phone"
+     }
+    },
+    {
+     "id": "phone",
+     "title": "Телефон",
+     "x": 680,
+     "y": 40,
+     "text": "Приятно познакомиться, {имя}! Оставьте номер телефона:",
+     "input": {
+      "enabled": true,
+      "variable": "телефон",
+      "kind": "phone",
+      "next": "task"
+     }
+    },
+    {
+     "id": "task",
+     "title": "Задача",
+     "x": 680,
+     "y": 230,
+     "text": "Коротко опишите, что вам нужно:",
+     "input": {
+      "enabled": true,
+      "variable": "задача",
+      "kind": "text",
+      "next": "done"
+     }
+    },
+    {
+     "id": "done",
+     "title": "Заявка принята",
+     "x": 360,
+     "y": 230,
+     "notifyOwner": true,
+     "text": "Спасибо, {имя}! Заявка принята, мы позвоним на {телефон}.",
+     "buttons": [
+      {
+       "text": "🔁 Новая заявка",
+       "goto": "name"
+      }
+     ]
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Оставить заявку",
+     "goto": "hello"
+    }
+   ],
+   "keywords": [],
+   "fallback": {
+    "mode": "block",
+    "goto": "hello"
+   }
+  }
+ },
+ {
+  "id": "booking",
+  "emoji": "📅",
+  "title": "Запись на услугу",
+  "description": "Выбор услуги и времени, телефон — запись приходит вам в Telegram.",
+  "flow": {
+   "version": 1,
+   "start": "start",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "start",
+     "title": "Выбор услуги",
+     "x": 40,
+     "y": 40,
+     "text": "Привет, {first_name}! На какую услугу вас записать?",
+     "buttons": [
+      {
+       "text": "✂️ Стрижка",
+       "goto": "haircut"
+      },
+      {
+       "text": "🧔 Борода",
+       "goto": "beard"
+      },
+      {
+       "text": "💈 Комплекс",
+       "goto": "complex"
+      }
+     ]
+    },
+    {
+     "id": "haircut",
+     "title": "Стрижка",
+     "x": 360,
+     "y": 0,
+     "next": "day",
+     "text": "Стрижка — 1 500 ₽, около 45 минут."
+    },
+    {
+     "id": "beard",
+     "title": "Борода",
+     "x": 360,
+     "y": 170,
+     "next": "day",
+     "text": "Оформление бороды — 900 ₽, около 30 минут."
+    },
+    {
+     "id": "complex",
+     "title": "Комплекс",
+     "x": 360,
+     "y": 340,
+     "next": "day",
+     "text": "Стрижка + борода — 2 200 ₽, около 75 минут."
+    },
+    {
+     "id": "day",
+     "title": "Выбор дня",
+     "x": 680,
+     "y": 170,
+     "text": "Когда вам удобно? Напишите день и время, например: «завтра в 18:00».",
+     "input": {
+      "enabled": true,
+      "variable": "время",
+      "kind": "text",
+      "next": "phone"
+     }
+    },
+    {
+     "id": "phone",
+     "title": "Телефон",
+     "x": 1000,
+     "y": 170,
+     "text": "Оставьте номер телефона для подтверждения:",
+     "input": {
+      "enabled": true,
+      "variable": "телефон",
+      "kind": "phone",
+      "next": "booked"
+     }
+    },
+    {
+     "id": "booked",
+     "title": "Записали",
+     "x": 1000,
+     "y": 360,
+     "notifyOwner": true,
+     "text": "Готово! Ждём вас: {время}. Если планы изменятся — просто напишите сюда.",
+     "buttons": [
+      {
+       "text": "📅 Записаться ещё",
+       "goto": "start"
+      }
+     ]
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Записаться",
+     "goto": "start"
+    }
+   ],
+   "keywords": [
+    {
+     "words": "запис, время, свобод",
+     "goto": "start"
+    }
+   ],
+   "fallback": {
+    "mode": "block",
+    "goto": "start"
+   }
+  }
+ },
+ {
+  "id": "support",
+  "emoji": "🎧",
+  "title": "Поддержка",
+  "description": "Частые вопросы и живой чат: вы отвечаете клиенту прямо из Telegram.",
+  "flow": {
+   "version": 1,
+   "start": "start",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "start",
+     "title": "Меню",
+     "x": 40,
+     "y": 40,
+     "text": "Здравствуйте, {first_name}! 👋 Чем можем помочь?",
+     "buttons": [
+      {
+       "text": "❓ Частые вопросы",
+       "goto": "faq"
+      },
+      {
+       "text": "💬 Написать оператору",
+       "goto": "check"
+      }
+     ]
+    },
+    {
+     "id": "faq",
+     "title": "Вопросы",
+     "x": 380,
+     "y": 40,
+     "text": "Выберите вопрос:",
+     "buttons": [
+      {
+       "text": "📦 Где мой заказ?",
+       "goto": "q1"
+      },
+      {
+       "text": "↩️ Как вернуть товар?",
+       "goto": "q2"
+      },
+      {
+       "text": "💳 Способы оплаты",
+       "goto": "q3"
+      },
+      {
+       "text": "⬅️ Назад",
+       "goto": "start"
+      }
+     ]
+    },
+    {
+     "id": "q1",
+     "title": "Где заказ",
+     "x": 720,
+     "y": 40,
+     "text": "📦 Статус заказа приходит в этот чат. Обычно доставка занимает 1–3 дня.",
+     "buttons": [
+      {
+       "text": "💬 Спросить оператора",
+       "goto": "check"
+      },
+      {
+       "text": "⬅️ К вопросам",
+       "goto": "faq"
+      }
+     ]
+    },
+    {
+     "id": "q2",
+     "title": "Возврат",
+     "x": 720,
+     "y": 210,
+     "text": "↩️ Вернуть товар можно в течение 14 дней. Напишите оператору номер заказа.",
+     "buttons": [
+      {
+       "text": "💬 Оформить возврат",
+       "goto": "check"
+      },
+      {
+       "text": "⬅️ К вопросам",
+       "goto": "faq"
+      }
+     ]
+    },
+    {
+     "id": "q3",
+     "title": "Оплата",
+     "x": 720,
+     "y": 380,
+     "text": "💳 Принимаем карты, СБП и оплату при получении.",
+     "buttons": [
+      {
+       "text": "⬅️ К вопросам",
+       "goto": "faq"
+      }
+     ]
+    },
+    {
+     "id": "check",
+     "title": "Рабочее время?",
+     "x": 380,
+     "y": 330,
+     "type": "condition",
+     "conditions": [
+      {
+       "op": "hours",
+       "value": "пн-пт 9:00-19:00",
+       "goto": "operator"
+      }
+     ],
+     "else": "offline"
+    },
+    {
+     "id": "operator",
+     "title": "Чат с оператором",
+     "x": 380,
+     "y": 480,
+     "type": "operator",
+     "text": "💬 Оператор на связи. Опишите вопрос одним сообщением — ответим в течение 10 минут.",
+     "next": "start"
+    },
+    {
+     "id": "offline",
+     "title": "Нерабочее время",
+     "x": 40,
+     "y": 330,
+     "text": "🌙 Сейчас нерабочее время (пн–пт 9:00–19:00). Оставьте вопрос — ответим утром.",
+     "input": {
+      "enabled": true,
+      "variable": "вопрос",
+      "kind": "text",
+      "next": "saved"
+     }
+    },
+    {
+     "id": "saved",
+     "title": "Вопрос принят",
+     "x": 40,
+     "y": 520,
+     "notifyOwner": true,
+     "text": "✅ Вопрос записан, мы ответим в рабочее время.",
+     "buttons": [
+      {
+       "text": "⬅️ В меню",
+       "goto": "start"
+      }
+     ]
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Меню",
+     "goto": "start"
+    },
+    {
+     "command": "operator",
+     "description": "Написать оператору",
+     "goto": "check"
+    }
+   ],
+   "keywords": [
+    {
+     "words": "оператор, человек, менеджер",
+     "goto": "check"
+    }
+   ],
+   "fallback": {
+    "mode": "block",
+    "goto": "start"
+   }
+  }
+ },
+ {
+  "id": "subgate",
+  "emoji": "🔒",
+  "title": "Бонус за подписку",
+  "description": "Проверяет подписку на ваш канал и выдаёт бонус только подписчикам.",
+  "flow": {
+   "version": 1,
+   "start": "start",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "start",
+     "title": "Условие",
+     "x": 40,
+     "y": 40,
+     "text": "🎁 Подпишитесь на наш канал и получите промокод на скидку 10%!",
+     "buttons": [
+      {
+       "text": "📢 Перейти в канал",
+       "url": "https://t.me/your_channel"
+      },
+      {
+       "text": "✅ Я подписался",
+       "goto": "check"
+      }
+     ]
+    },
+    {
+     "id": "check",
+     "title": "Проверка подписки",
+     "x": 380,
+     "y": 40,
+     "type": "condition",
+     "conditions": [
+      {
+       "op": "member",
+       "value": "@your_channel",
+       "goto": "reward"
+      }
+     ],
+     "else": "nope"
+    },
+    {
+     "id": "reward",
+     "title": "Бонус",
+     "x": 720,
+     "y": 40,
+     "type": "action",
+     "actions": [
+      {
+       "kind": "tag",
+       "value": "подписчик"
+      }
+     ],
+     "next": "code"
+    },
+    {
+     "id": "code",
+     "title": "Промокод",
+     "x": 1060,
+     "y": 40,
+     "text": "🎉 Спасибо за подписку, {first_name}!\n\nВаш промокод: BONUS10"
+    },
+    {
+     "id": "nope",
+     "title": "Не подписан",
+     "x": 380,
+     "y": 230,
+     "text": "🙁 Подписка не найдена. Подпишитесь и нажмите кнопку ещё раз.",
+     "buttons": [
+      {
+       "text": "📢 Перейти в канал",
+       "url": "https://t.me/your_channel"
+      },
+      {
+       "text": "🔄 Проверить снова",
+       "goto": "check"
+      }
+     ]
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Получить бонус",
+     "goto": "start"
+    }
+   ],
+   "keywords": [],
+   "fallback": {
+    "mode": "block",
+    "goto": "start"
+   }
+  }
+ },
+ {
+  "id": "quiz",
+  "emoji": "🎯",
+  "title": "Квиз с баллами",
+  "description": "Вопросы с вариантами, подсчёт баллов и разный итог по результату.",
+  "flow": {
+   "version": 1,
+   "start": "intro",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "intro",
+     "title": "Начало",
+     "x": 0,
+     "y": 160,
+     "text": "Привет, {first_name}! Ответьте на 2 вопроса и узнайте свой результат 🎯",
+     "buttons": [
+      {
+       "text": "🚀 Начать",
+       "goto": "reset"
+      }
+     ]
+    },
+    {
+     "id": "reset",
+     "type": "action",
+     "title": "Обнулить баллы",
+     "x": 320,
+     "y": 160,
+     "actions": [
+      {
+       "kind": "set",
+       "variable": "баллы",
+       "value": "0"
+      }
+     ],
+     "next": "q1"
+    },
+    {
+     "id": "q1",
+     "title": "Вопрос 1",
+     "x": 640,
+     "y": 160,
+     "text": "1/2. Какая планета ближе всего к Солнцу?",
+     "buttons": [
+      {
+       "text": "Меркурий",
+       "goto": "q1_ok"
+      },
+      {
+       "text": "Венера",
+       "goto": "q2"
+      },
+      {
+       "text": "Марс",
+       "goto": "q2"
+      }
+     ]
+    },
+    {
+     "id": "q1_ok",
+     "type": "action",
+     "title": "+1 балл",
+     "x": 960,
+     "y": 40,
+     "actions": [
+      {
+       "kind": "increment",
+       "variable": "баллы",
+       "value": "1"
+      }
+     ],
+     "next": "q2"
+    },
+    {
+     "id": "q2",
+     "title": "Вопрос 2",
+     "x": 960,
+     "y": 220,
+     "text": "2/2. Сколько секунд в одной минуте?",
+     "buttons": [
+      {
+       "text": "60",
+       "goto": "q2_ok"
+      },
+      {
+       "text": "100",
+       "goto": "result"
+      }
+     ]
+    },
+    {
+     "id": "q2_ok",
+     "type": "action",
+     "title": "+1 балл",
+     "x": 1280,
+     "y": 100,
+     "actions": [
+      {
+       "kind": "increment",
+       "variable": "баллы",
+       "value": "1"
+      }
+     ],
+     "next": "result"
+    },
+    {
+     "id": "result",
+     "type": "condition",
+     "title": "Проверка результата",
+     "x": 1280,
+     "y": 300,
+     "conditions": [
+      {
+       "variable": "баллы",
+       "op": "gt",
+       "value": "1",
+       "goto": "win"
+      }
+     ],
+     "else": "lose"
+    },
+    {
+     "id": "win",
+     "title": "Отлично",
+     "x": 1600,
+     "y": 220,
+     "text": "🏆 Отлично! Вы набрали {баллы} из 2.",
+     "buttons": [
+      {
+       "text": "🔁 Ещё раз",
+       "goto": "reset"
+      }
+     ]
+    },
+    {
+     "id": "lose",
+     "title": "Можно лучше",
+     "x": 1600,
+     "y": 420,
+     "text": "Вы набрали {баллы} из 2. Попробуйте ещё раз!",
+     "buttons": [
+      {
+       "text": "🔁 Ещё раз",
+       "goto": "reset"
+      }
+     ]
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Начать квиз",
+     "goto": "intro"
+    }
+   ],
+   "keywords": [],
+   "fallback": {
+    "mode": "start"
+   }
+  }
+ },
+ {
+  "id": "wheel",
+  "emoji": "🎡",
+  "title": "Колесо удачи",
+  "description": "Розыгрыш призов со случайным выбором и одной попыткой на человека.",
+  "flow": {
+   "version": 1,
+   "start": "start",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "start",
+     "title": "Приветствие",
+     "x": 40,
+     "y": 40,
+     "text": "🎡 Крутите колесо удачи и выиграйте приз! У каждого одна попытка.",
+     "buttons": [
+      {
+       "text": "🎡 Крутить!",
+       "goto": "tried"
+      }
+     ]
+    },
+    {
+     "id": "tried",
+     "title": "Уже крутил?",
+     "x": 380,
+     "y": 40,
+     "type": "condition",
+     "conditions": [
+      {
+       "variable": "приз",
+       "op": "filled",
+       "goto": "again"
+      }
+     ],
+     "else": "spin"
+    },
+    {
+     "id": "again",
+     "title": "Повтор",
+     "x": 380,
+     "y": 230,
+     "text": "Вы уже участвовали 🙂 Ваш приз: {приз}"
+    },
+    {
+     "id": "spin",
+     "title": "Крутим",
+     "x": 720,
+     "y": 40,
+     "text": "🎡 Крутим колесо...",
+     "next": "wheel",
+     "delay": 1
+    },
+    {
+     "id": "wheel",
+     "title": "Случайный приз",
+     "x": 1060,
+     "y": 40,
+     "type": "random",
+     "branches": [
+      {
+       "goto": "p1",
+       "weight": 10
+      },
+      {
+       "goto": "p2",
+       "weight": 30
+      },
+      {
+       "goto": "p3",
+       "weight": 60
+      }
+     ]
+    },
+    {
+     "id": "p1",
+     "title": "Супер-приз",
+     "x": 1400,
+     "y": 40,
+     "type": "action",
+     "actions": [
+      {
+       "kind": "set",
+       "variable": "приз",
+       "value": "скидка 50% — WIN50"
+      },
+      {
+       "kind": "save_lead"
+      }
+     ],
+     "next": "won",
+     "delay": 2
+    },
+    {
+     "id": "p2",
+     "title": "Средний приз",
+     "x": 1400,
+     "y": 220,
+     "type": "action",
+     "actions": [
+      {
+       "kind": "set",
+       "variable": "приз",
+       "value": "скидка 15% — SPIN15"
+      },
+      {
+       "kind": "save_lead"
+      }
+     ],
+     "next": "won",
+     "delay": 2
+    },
+    {
+     "id": "p3",
+     "title": "Малый приз",
+     "x": 1400,
+     "y": 400,
+     "type": "action",
+     "actions": [
+      {
+       "kind": "set",
+       "variable": "приз",
+       "value": "бесплатная доставка — FREESHIP"
+      },
+      {
+       "kind": "save_lead"
+      }
+     ],
+     "next": "won",
+     "delay": 2
+    },
+    {
+     "id": "won",
+     "title": "Выигрыш",
+     "x": 1060,
+     "y": 400,
+     "text": "🎉 Поздравляем, {first_name}! Ваш приз: {приз}\n\nПокажите промокод при заказе."
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Крутить колесо",
+     "goto": "start"
+    }
+   ],
+   "keywords": [],
+   "fallback": {
+    "mode": "block",
+    "goto": "start"
+   }
+  }
+ },
+ {
+  "id": "course",
+  "emoji": "📚",
+  "title": "Мини-курс по дням",
+  "description": "Уроки приходят сами по расписанию, по одному в день.",
+  "flow": {
+   "version": 1,
+   "start": "start",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "start",
+     "title": "Приглашение",
+     "x": 40,
+     "y": 40,
+     "text": "📚 Бесплатный мини-курс «Telegram для бизнеса» — 3 урока, по одному в день. Начнём?",
+     "buttons": [
+      {
+       "text": "🚀 Начать курс",
+       "goto": "enroll"
+      }
+     ]
+    },
+    {
+     "id": "enroll",
+     "title": "Запись на курс",
+     "x": 380,
+     "y": 40,
+     "type": "action",
+     "actions": [
+      {
+       "kind": "tag",
+       "value": "курс"
+      },
+      {
+       "kind": "cancel_reminders"
+      },
+      {
+       "kind": "remind",
+       "value": "1",
+       "unit": "day",
+       "goto": "l2"
+      }
+     ],
+     "next": "l1"
+    },
+    {
+     "id": "l1",
+     "title": "Урок 1",
+     "x": 720,
+     "y": 40,
+     "text": "📖 Урок 1. Зачем бизнесу Telegram\n\nКанал, бот и чат — три кирпичика...\n\nСледующий урок придёт завтра 👋"
+    },
+    {
+     "id": "l2",
+     "title": "Урок 2",
+     "x": 720,
+     "y": 230,
+     "type": "message",
+     "text": "📖 Урок 2. Как вести канал\n\n...\n\nЗавтра — финальный урок!",
+     "next": "plan3"
+    },
+    {
+     "id": "plan3",
+     "title": "Запланировать урок 3",
+     "x": 1060,
+     "y": 230,
+     "type": "action",
+     "actions": [
+      {
+       "kind": "remind",
+       "value": "1",
+       "unit": "day",
+       "goto": "l3"
+      }
+     ]
+    },
+    {
+     "id": "l3",
+     "title": "Урок 3",
+     "x": 720,
+     "y": 420,
+     "text": "📖 Урок 3. Бот, который продаёт\n\n...\n\n🎓 Курс пройден! Хотите разбор вашего проекта?",
+     "buttons": [
+      {
+       "text": "✍️ Записаться на разбор",
+       "goto": "lead"
+      }
+     ]
+    },
+    {
+     "id": "lead",
+     "title": "Заявка",
+     "x": 1060,
+     "y": 420,
+     "text": "Как с вами связаться? Напишите телефон или @username:",
+     "input": {
+      "enabled": true,
+      "variable": "контакт",
+      "kind": "text",
+      "next": "thanks"
+     }
+    },
+    {
+     "id": "thanks",
+     "title": "Спасибо",
+     "x": 1400,
+     "y": 420,
+     "notifyOwner": true,
+     "text": "🙌 Спасибо! Мы свяжемся с вами в ближайшее время."
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "О курсе",
+     "goto": "start"
+    }
+   ],
+   "keywords": [],
+   "fallback": {
+    "mode": "block",
+    "goto": "start"
+   }
+  }
+ },
+ {
+  "id": "assistant",
+  "emoji": "🤖",
+  "title": "ИИ-ассистент",
+  "description": "Отвечает на любые вопросы через ИИ, подключённый в Agentgram.",
+  "flow": {
+   "version": 1,
+   "start": "hello",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "hello",
+     "title": "Приветствие",
+     "x": 40,
+     "y": 40,
+     "text": "Привет, {first_name}! Я ИИ-помощник. Задайте любой вопрос 🙂"
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Начать",
+     "goto": "hello"
+    }
+   ],
+   "keywords": [],
+   "fallback": {
+    "mode": "ai",
+    "prompt": "Ты дружелюбный помощник в Telegram. Отвечай кратко, по делу и на языке пользователя. Не используй Markdown."
+   }
+  }
+ },
+ {
+  "id": "blank",
+  "emoji": "✨",
+  "title": "С чистого листа",
+  "description": "Один стартовый блок — соберите бота сами.",
+  "flow": {
+   "version": 1,
+   "start": "start",
+   "buttonsStyle": "inline",
+   "blocks": [
+    {
+     "id": "start",
+     "title": "Старт",
+     "x": 40,
+     "y": 40,
+     "text": "Привет, {first_name}!"
+    }
+   ],
+   "commands": [
+    {
+     "command": "start",
+     "description": "Начать",
+     "goto": "start"
+    }
+   ],
+   "keywords": [],
+   "fallback": {
+    "mode": "start"
+   }
+  }
+ }
 ]

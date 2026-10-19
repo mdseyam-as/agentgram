@@ -505,6 +505,8 @@ function trackUser(ctx) {
 	const now = Math.floor(Date.now() / 1000);
 	const user = users[id] || { first_seen: now };
 	user.name = [from.first_name, from.last_name].filter(Boolean).join(' ');
+	user.first_name = from.first_name || '';
+	if (from.last_name) user.last_name = from.last_name; else delete user.last_name;
 	user.username = from.username || '';
 	user.last_seen = now;
 	user.messages = (user.messages || 0) + 1;
@@ -521,10 +523,12 @@ global.__agentgram_broadcast = (json) => {
 		return;
 	}
 	const users = store[USERS_KEY] || {};
-	const ids = Object.keys(users).filter((id) => !users[id].blocked);
+	const tag = request.tag ? String(request.tag) : '';
+	const ids = Object.keys(users).filter((id) => !users[id].blocked
+		&& (!tag || (users[id].tags || []).includes(tag)));
 	const options = request.buttons ? { buttons: request.buttons } : {};
 	if (request.html) options.html = true;
-	log(0, ['📣 Рассылка начата: получателей ' + ids.length]);
+	log(0, ['📣 Рассылка начата' + (tag ? ' (метка «' + tag + '»)' : '') + ': получателей ' + ids.length]);
 	(async () => {
 		let sent = 0;
 		let failed = 0;
@@ -548,6 +552,80 @@ global.__agentgram_broadcast = (json) => {
 		log(0, ['📣 Рассылка завершена: доставлено ' + sent + ', не доставлено ' + failed]);
 	})();
 };
+
+// Calls from Bot Studio itself (order status changes and the like).
+const hooks = {};
+global.__agentgram_hook = (json) => {
+	let request;
+	try {
+		request = JSON.parse(json);
+	} catch (e) {
+		return;
+	}
+	const fn = hooks[request && request.type];
+	if (fn) run(() => fn(request), 'hook ' + request.type);
+};
+
+function userRecord(id) {
+	const users = store[USERS_KEY] || (store[USERS_KEY] = {});
+	id = String(id);
+	return users[id] || (users[id] = { first_seen: Math.floor(Date.now() / 1000) });
+}
+const tags = {
+	list(userId) {
+		const users = store[USERS_KEY] || {};
+		const user = users[String(userId)];
+		return user && Array.isArray(user.tags) ? user.tags.slice() : [];
+	},
+	has(userId, tag) { return tags.list(userId).includes(String(tag)); },
+	add(userId, tag) {
+		tag = String(tag || '').trim();
+		if (!tag || userId === undefined || userId === null) return;
+		const user = userRecord(userId);
+		user.tags = Array.isArray(user.tags) ? user.tags : [];
+		if (!user.tags.includes(tag)) {
+			user.tags.push(tag);
+			scheduleSave();
+		}
+	},
+	remove(userId, tag) {
+		const users = store[USERS_KEY] || {};
+		const user = users[String(userId)];
+		if (!user || !Array.isArray(user.tags)) return;
+		const index = user.tags.indexOf(String(tag).trim());
+		if (index >= 0) {
+			user.tags.splice(index, 1);
+			scheduleSave();
+		}
+	},
+};
+
+// Updates of one chat are handled one after another: a handler reads the
+// chat session when it starts and saves it when it ends, so parallel
+// handlers (fast taps on buttons) would overwrite each other's changes.
+const chains = new Map();
+function serial(key, task) {
+	if (key === undefined || key === null) return task();
+	const previous = chains.get(key);
+	let wait = Promise.resolve();
+	if (previous) {
+		// A handler hanging for a minute doesn't block the chat forever.
+		wait = new Promise((resolve) => {
+			const timer = global.setTimeout(resolve, 60000);
+			previous.then(() => {
+				global.clearTimeout(timer);
+				resolve();
+			});
+		});
+	}
+	const current = wait.then(task);
+	const tail = current.then(() => undefined, () => undefined);
+	chains.set(key, tail);
+	tail.then(() => {
+		if (chains.get(key) === tail) chains.delete(key);
+	});
+	return current;
+}
 
 global.__agentgram_dispatch = (json) => {
 	let update;
@@ -580,14 +658,17 @@ global.__agentgram_dispatch = (json) => {
 		}
 		return Promise.resolve();
 	};
-	Promise.resolve().then(next).then(
+	const key = ctx.chatId !== undefined
+		? ctx.chatId
+		: (ctx.from ? ctx.from.id : undefined);
+	serial(key, () => Promise.resolve().then(next).then(
 		() => finalize(ctx),
 		(e) => {
 			reportError(e, ctx.command ? 'handler /' + ctx.command
 				: ctx.callbackQuery ? 'action "' + ctx.data + '"'
 				: 'handler for ' + ctx.updateType);
 			finalize(ctx);
-		});
+		}));
 };
 
 function list(value) {
@@ -638,6 +719,45 @@ const bot = {
 	send(chatId, text, options) { return send('sendMessage', chatId, { text: String(text) }, options); },
 	sendPhoto(chatId, photo, options) { return send('sendPhoto', chatId, { photo }, options); },
 	sendToOwner(text, options) { return send('sendMessage', ownerId, { text: String(text) }, options); },
+	tags,
+	// Users who wrote to the bot: {users, active (7 days), blocked}.
+	audience() {
+		const users = store[USERS_KEY] || {};
+		const weekAgo = Math.floor(Date.now() / 1000) - 7 * 86400;
+		const result = { users: 0, active: 0, blocked: 0 };
+		for (const id of Object.keys(users)) {
+			++result.users;
+			if (users[id].blocked) ++result.blocked;
+			else if ((users[id].last_seen || 0) >= weekAgo) ++result.active;
+		}
+		return result;
+	},
+	// Runs fn(ctx) for a private chat without an incoming update: reminders,
+	// operator replies. ctx.session is saved afterwards.
+	withChat(chatId, fn, from) {
+		const user = (store[USERS_KEY] || {})[String(chatId)] || {};
+		const ctx = new Context({
+			update_id: 0,
+			message: {
+				message_id: 0,
+				date: Math.floor(Date.now() / 1000),
+				chat: { id: Number(chatId), type: 'private' },
+				from: from || {
+					id: Number(chatId),
+					is_bot: false,
+					first_name: user.first_name || user.name || '',
+					last_name: user.last_name,
+					username: user.username || undefined,
+				},
+			},
+		});
+		ctx.updateType = 'scheduled';
+		return serial(Number(chatId), () => run(() => fn(ctx), 'scheduled').then(() => finalize(ctx)));
+	},
+	onHook(type, fn) {
+		hooks[String(type)] = checkHandler(fn);
+		return bot;
+	},
 	setCommands(commands) {
 		const entries = Array.isArray(commands)
 			? commands

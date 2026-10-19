@@ -70,7 +70,17 @@ struct AudienceStats {
 	int active = 0;
 	int blocked = 0;
 	int leads = 0;
+	int orders = 0;
+	// Sum of orders that are not canceled or waiting for payment.
+	double revenue = 0.;
+	QString currency;
+	// Tag -> users with it, most used first.
+	std::vector<std::pair<QString, int>> tags;
 };
+
+// "1 290 ₽", "150 ⭐", "$12.50".
+[[nodiscard]] QString FormatMoney(double value, const QString &currency);
+[[nodiscard]] QString OrderStatusTitle(const QString &status);
 
 // All bots of one Telegram account. Bots with enabled == true run while
 // the account is open in the app.
@@ -101,11 +111,19 @@ public:
 	void clearStorage(const QString &id);
 	[[nodiscard]] AudienceStats audience(const QString &id) const;
 	[[nodiscard]] QJsonArray leads(const QString &id) const;
-	// Sends a message to every private chat of a running bot.
+	[[nodiscard]] QJsonArray orders(const QString &id) const;
+	// Changes the status in a running bot, the buyer gets a message.
+	QString setOrderStatus(
+		const QString &id,
+		int orderId,
+		const QString &status);
+	// Sends a message to every private chat of a running bot, or only to
+	// users with the tag.
 	QString broadcast(
 		const QString &id,
 		const QString &text,
-		const QString &photo = QString());
+		const QString &photo = QString(),
+		const QString &tag = QString());
 
 	[[nodiscard]] rpl::producer<> botsChanged() const;
 	[[nodiscard]] rpl::producer<QString> botUpdated() const;

@@ -82,19 +82,126 @@ constexpr auto kMaxTextLines = 3;
 		return u"число"_q;
 	} else if (kind == u"email"_q) {
 		return u"e-mail"_q;
+	} else if (kind == u"location"_q) {
+		return u"адрес"_q;
+	} else if (kind == u"photo"_q) {
+		return u"фото"_q;
 	}
 	return u"текст"_q;
 }
 
+[[nodiscard]] QString BlockType(const QJsonObject &block) {
+	const auto type = block.value(u"type"_q).toString();
+	return type.isEmpty() ? u"message"_q : type;
+}
+
+struct BlockKind {
+	QString type;
+	QString title;
+	QString about;
+	QString badge;
+};
+
+[[nodiscard]] const std::vector<BlockKind> &BlockKinds() {
+	static const auto result = std::vector<BlockKind>{
+		{ u"message"_q, u"💬 Сообщение"_q, u"текст, фото, кнопки"_q, QString() },
+		{ u"condition"_q, u"⑂ Условие"_q, u"ответы, подписка, время"_q, u"⑂ условие"_q },
+		{ u"ai"_q, u"✦ Ответ ИИ"_q, u"текст пишет нейросеть"_q, u"✦ ИИ"_q },
+		{ u"action"_q, u"⚡ Действия"_q, u"баллы, метки, таймеры"_q, u"⚡ действия"_q },
+		{ u"random"_q, u"🎲 Случайный выбор"_q, u"розыгрыш, A/B-тест"_q, u"🎲 случайно"_q },
+		{ u"operator"_q, u"🎧 Чат с оператором"_q, u"живой чат с клиентом"_q, u"🎧 оператор"_q },
+		{ u"catalog"_q, u"🛍 Каталог"_q, u"товары и цены"_q, u"🛍 каталог"_q },
+		{ u"cart"_q, u"🧺 Корзина"_q, u"сумма и оформление"_q, u"🧺 корзина"_q },
+		{ u"order"_q, u"📦 Заказ и оплата"_q, u"оплата звёздами, картой"_q, u"📦 заказ"_q },
+	};
+	return result;
+}
+
+[[nodiscard]] const BlockKind &KindOf(const QString &type) {
+	for (const auto &kind : BlockKinds()) {
+		if (kind.type == type) {
+			return kind;
+		}
+	}
+	return BlockKinds().front();
+}
+
+[[nodiscard]] bool IsShopBlock(const QString &type) {
+	return (type == u"catalog"_q)
+		|| (type == u"cart"_q)
+		|| (type == u"order"_q);
+}
+
+[[nodiscard]] bool HasShop(const QJsonObject &flow) {
+	for (const auto &value : FlowBlocks(flow)) {
+		if (IsShopBlock(BlockType(value.toObject()))) {
+			return true;
+		}
+	}
+	return false;
+}
+
 [[nodiscard]] QStringList KnownVariables(const QJsonObject &flow) {
 	auto result = QStringList{ u"first_name"_q, u"name"_q, u"username"_q };
-	for (const auto &value : FlowBlocks(flow)) {
-		const auto input = Input(value.toObject());
-		const auto name = input.value(u"variable"_q).toString();
-		if (input.value(u"enabled"_q).toBool()
-			&& !name.isEmpty()
-			&& !result.contains(name)) {
+	const auto add = [&](const QString &name) {
+		if (!name.isEmpty() && !result.contains(name)) {
 			result.push_back(name);
+		}
+	};
+	for (const auto &value : FlowBlocks(flow)) {
+		const auto block = value.toObject();
+		const auto input = Input(block);
+		if (input.value(u"enabled"_q).toBool()) {
+			add(input.value(u"variable"_q).toString());
+		}
+		add(block.value(u"saveChoice"_q).toString());
+		const auto type = BlockType(block);
+		if (type == u"ai"_q) {
+			add(block.value(u"variable"_q).toString());
+		} else if (type == u"order"_q) {
+			add(u"order_id"_q);
+			add(u"order_total"_q);
+			add(u"order_items"_q);
+		}
+		for (const auto &action : block.value(u"actions"_q).toArray()) {
+			const auto object = action.toObject();
+			const auto kind = object.value(u"kind"_q).toString();
+			if (kind == u"set"_q
+				|| kind == u"increment"_q
+				|| kind == u"calc"_q
+				|| kind == u"request"_q) {
+				add(object.value(u"variable"_q).toString());
+			}
+		}
+	}
+	return result;
+}
+
+[[nodiscard]] QString ShopCurrency(const QJsonObject &flow) {
+	const auto currency = flow.value(u"shop"_q).toObject().value(
+		u"currency"_q).toString();
+	return currency.isEmpty() ? u"RUB"_q : currency;
+}
+
+[[nodiscard]] QString ProductTitle(
+		const QJsonObject &flow,
+		const QString &key) {
+	for (const auto &value : flow.value(u"products"_q).toArray()) {
+		const auto product = value.toObject();
+		if (FlowProductKey(product) == key) {
+			return product.value(u"title"_q).toString();
+		}
+	}
+	return QString();
+}
+
+[[nodiscard]] QStringList ProductCategories(const QJsonObject &flow) {
+	auto result = QStringList();
+	for (const auto &value : flow.value(u"products"_q).toArray()) {
+		const auto category = value.toObject().value(
+			u"category"_q).toString().trimmed();
+		if (!category.isEmpty() && !result.contains(category)) {
+			result.push_back(category);
 		}
 	}
 	return result;
@@ -107,6 +214,7 @@ struct NodeRow {
 	QString target;
 	bool warning = false;
 	bool link = false;
+	bool button = false;
 };
 
 struct NodeLayout {
@@ -116,11 +224,6 @@ struct NodeLayout {
 	QRect footer;
 	QPoint nextAnchor;
 };
-
-[[nodiscard]] QString BlockType(const QJsonObject &block) {
-	const auto type = block.value(u"type"_q).toString();
-	return type.isEmpty() ? u"message"_q : type;
-}
 
 [[nodiscard]] QString OperatorText(const QString &op) {
 	if (op == u"neq"_q) {
@@ -135,11 +238,67 @@ struct NodeLayout {
 		return u"заполнено"_q;
 	} else if (op == u"empty"_q) {
 		return u"пусто"_q;
+	} else if (op == u"member"_q) {
+		return u"подписан на канал"_q;
+	} else if (op == u"tag"_q) {
+		return u"есть метка"_q;
+	} else if (op == u"hours"_q) {
+		return u"рабочее время"_q;
 	}
 	return u"="_q;
 }
 
-[[nodiscard]] QString ActionText(const QJsonObject &action) {
+// Conditions that don't look at an answer.
+[[nodiscard]] bool OperatorWithoutVariable(const QString &op) {
+	return (op == u"member"_q) || (op == u"tag"_q) || (op == u"hours"_q);
+}
+
+[[nodiscard]] QString UnitText(const QString &unit) {
+	return (unit == u"hour"_q)
+		? u"ч"_q
+		: (unit == u"day"_q)
+		? u"дн"_q
+		: u"мин"_q;
+}
+
+[[nodiscard]] QString ActionTitle(const QString &kind) {
+	if (kind == u"set"_q) {
+		return u"✎ Записать значение"_q;
+	} else if (kind == u"increment"_q) {
+		return u"➕ Прибавить к числу"_q;
+	} else if (kind == u"calc"_q) {
+		return u"🧮 Посчитать по формуле"_q;
+	} else if (kind == u"clear"_q) {
+		return u"🧹 Очистить ответы"_q;
+	} else if (kind == u"notify"_q) {
+		return u"📩 Написать мне"_q;
+	} else if (kind == u"send"_q) {
+		return u"📢 Отправить в чат или канал"_q;
+	} else if (kind == u"webhook"_q) {
+		return u"🌐 Отправить данные на сайт"_q;
+	} else if (kind == u"request"_q) {
+		return u"🔗 Запрос к API и сохранить ответ"_q;
+	} else if (kind == u"save_lead"_q) {
+		return u"🗂 Сохранить заявку в таблицу"_q;
+	} else if (kind == u"tag"_q) {
+		return u"🏷 Добавить метку"_q;
+	} else if (kind == u"untag"_q) {
+		return u"🏷 Снять метку"_q;
+	} else if (kind == u"remind"_q) {
+		return u"⏰ Напомнить позже"_q;
+	} else if (kind == u"cancel_reminders"_q) {
+		return u"🔕 Отменить напоминания"_q;
+	} else if (kind == u"add_to_cart"_q) {
+		return u"🛒 Положить товар в корзину"_q;
+	} else if (kind == u"clear_cart"_q) {
+		return u"🧺 Очистить корзину"_q;
+	}
+	return kind;
+}
+
+[[nodiscard]] QString ActionText(
+		const QJsonObject &flow,
+		const QJsonObject &action) {
 	const auto kind = action.value(u"kind"_q).toString();
 	const auto variable = action.value(u"variable"_q).toString();
 	const auto value = action.value(u"value"_q).toString();
@@ -147,31 +306,74 @@ struct NodeLayout {
 		return u"✎ {%1} = %2"_q.arg(variable, value);
 	} else if (kind == u"increment"_q) {
 		return u"➕ {%1} + %2"_q.arg(variable, value.isEmpty() ? u"1"_q : value);
-	} else if (kind == u"clear"_q) {
-		return u"🧹 Очистить ответы"_q;
-	} else if (kind == u"notify"_q) {
-		return u"📩 Написать мне"_q;
+	} else if (kind == u"calc"_q) {
+		return u"🧮 {%1} = %2"_q.arg(variable, value);
 	} else if (kind == u"send"_q) {
 		return u"📢 В чат "_q + action.value(u"chat"_q).toString();
 	} else if (kind == u"webhook"_q) {
 		return u"🌐 Вебхук "_q + QUrl(action.value(u"url"_q).toString()).host();
-	} else if (kind == u"save_lead"_q) {
-		return u"🗂 Сохранить заявку"_q;
+	} else if (kind == u"request"_q) {
+		return u"🔗 "_q
+			+ QUrl(action.value(u"url"_q).toString()).host()
+			+ (variable.isEmpty() ? QString() : (u" → {"_q + variable + '}'));
+	} else if (kind == u"tag"_q) {
+		return u"🏷 + "_q + value;
+	} else if (kind == u"untag"_q) {
+		return u"🏷 − "_q + value;
+	} else if (kind == u"remind"_q) {
+		return u"⏰ через %1 %2"_q.arg(
+			value.isEmpty() ? u"1"_q : value,
+			UnitText(action.value(u"unit"_q).toString()));
+	} else if (kind == u"add_to_cart"_q) {
+		const auto title = ProductTitle(
+			flow,
+			action.value(u"product"_q).toString());
+		return u"🛒 "_q + (title.isEmpty() ? u"⚠ выберите товар"_q : title);
 	}
-	return kind;
+	return ActionTitle(kind);
 }
 
-[[nodiscard]] std::vector<NodeRow> BlockRows(const QJsonObject &block) {
+[[nodiscard]] std::vector<NodeRow> ButtonRows(const QJsonObject &block) {
+	auto result = std::vector<NodeRow>();
+	for (const auto &value : Buttons(block)) {
+		const auto button = value.toObject();
+		const auto url = button.value(u"url"_q).toString();
+		const auto target = button.value(u"goto"_q).toString();
+		result.push_back({
+			button.value(u"text"_q).toString(),
+			target,
+			url.isEmpty() && target.isEmpty() && block.value(
+				u"saveChoice"_q).toString().isEmpty(),
+			!url.isEmpty(),
+			true,
+		});
+	}
+	return result;
+}
+
+[[nodiscard]] QString PaymentText(const QString &payment) {
+	return (payment == u"stars"_q)
+		? u"⭐ Оплата звёздами Telegram"_q
+		: (payment == u"card"_q)
+		? u"💳 Оплата картой"_q
+		: u"💵 Оплата при получении"_q;
+}
+
+[[nodiscard]] std::vector<NodeRow> BlockRows(
+		const QJsonObject &flow,
+		const QJsonObject &block) {
 	auto result = std::vector<NodeRow>();
 	const auto type = BlockType(block);
 	if (type == u"condition"_q) {
 		for (const auto &value : block.value(u"conditions"_q).toArray()) {
 			const auto condition = value.toObject();
 			const auto op = condition.value(u"op"_q).toString();
-			auto text = u"если {"_q
-				+ condition.value(u"variable"_q).toString()
-				+ u"} "_q
-				+ OperatorText(op);
+			auto text = OperatorWithoutVariable(op)
+				? (u"если "_q + OperatorText(op))
+				: (u"если {"_q
+					+ condition.value(u"variable"_q).toString()
+					+ u"} "_q
+					+ OperatorText(op));
 			if (op != u"filled"_q && op != u"empty"_q) {
 				text += ' ' + condition.value(u"value"_q).toString();
 			}
@@ -180,30 +382,85 @@ struct NodeLayout {
 		}
 		const auto otherwise = block.value(u"else"_q).toString();
 		result.push_back({ u"иначе"_q, otherwise, false });
-	} else if (type == u"action"_q) {
-		for (const auto &value : block.value(u"actions"_q).toArray()) {
-			result.push_back({ ActionText(value.toObject()) });
+		return result;
+	} else if (type == u"random"_q) {
+		const auto branches = block.value(u"branches"_q).toArray();
+		auto total = 0.;
+		for (const auto &value : branches) {
+			total += std::max(value.toObject().value(u"weight"_q).toDouble(1.), 0.);
 		}
-	} else {
-		for (const auto &value : Buttons(block)) {
-			const auto button = value.toObject();
-			const auto url = button.value(u"url"_q).toString();
-			const auto target = button.value(u"goto"_q).toString();
+		for (const auto &value : branches) {
+			const auto branch = value.toObject();
+			const auto weight = std::max(branch.value(u"weight"_q).toDouble(1.), 0.);
+			const auto target = branch.value(u"goto"_q).toString();
 			result.push_back({
-				button.value(u"text"_q).toString(),
+				u"🎲 %1%"_q.arg(total > 0 ? qRound(weight * 100. / total) : 0),
 				target,
-				url.isEmpty() && target.isEmpty(),
-				!url.isEmpty(),
+				target.isEmpty(),
 			});
 		}
+		return result;
+	} else if (type == u"action"_q) {
+		for (const auto &value : block.value(u"actions"_q).toArray()) {
+			const auto action = value.toObject();
+			const auto remind = (action.value(u"kind"_q).toString()
+				== u"remind"_q);
+			const auto target = remind
+				? action.value(u"goto"_q).toString()
+				: QString();
+			result.push_back({
+				ActionText(flow, action),
+				target,
+				remind && target.isEmpty(),
+			});
+		}
+		return result;
+	} else if (type == u"catalog"_q) {
+		const auto category = block.value(u"category"_q).toString().trimmed();
+		auto count = 0;
+		for (const auto &value : flow.value(u"products"_q).toArray()) {
+			if (category.isEmpty()
+				|| value.toObject().value(u"category"_q).toString().trimmed()
+					== category) {
+				++count;
+			}
+		}
+		result.push_back({
+			(category.isEmpty() ? u"📦 Товаров: %1"_q : (category + u" · %1"_q)).arg(count),
+			QString(),
+			count == 0,
+		});
+		const auto cart = block.value(u"cart"_q).toString();
+		if (!cart.isEmpty()) {
+			result.push_back({ u"🧺 Корзина"_q, cart });
+		}
+	} else if (type == u"cart"_q) {
+		const auto checkout = block.value(u"checkout"_q).toString();
+		result.push_back({ u"✅ Оформить заказ"_q, checkout, checkout.isEmpty() });
+	} else if (type == u"order"_q) {
+		const auto payment = block.value(u"payment"_q).toString();
+		result.push_back({ PaymentText(payment) });
+		if (payment == u"stars"_q || payment == u"card"_q) {
+			result.push_back({ u"✅ После оплаты"_q, block.value(u"paid"_q).toString() });
+		}
+	} else if (type == u"operator"_q) {
+		const auto chat = block.value(u"chat"_q).toString().trimmed();
+		result.push_back({ chat.isEmpty()
+			? u"🎧 Вопросы приходят вам"_q
+			: (u"🎧 Вопросы в "_q + chat) });
 	}
+	const auto buttons = ButtonRows(block);
+	result.insert(end(result), begin(buttons), end(buttons));
 	return result;
 }
 
 [[nodiscard]] QString BlockPreview(const QJsonObject &block) {
 	const auto type = BlockType(block);
+	const auto text = block.value(u"text"_q).toString().trimmed();
 	if (type == u"condition"_q) {
-		return u"Проверяет ответы и выбирает ветку"_q;
+		return u"Проверяет и выбирает ветку"_q;
+	} else if (type == u"random"_q) {
+		return u"Выбирает ветку случайно"_q;
 	} else if (type == u"action"_q) {
 		return block.value(u"actions"_q).toArray().isEmpty()
 			? u"Добавьте действия"_q
@@ -213,27 +470,43 @@ struct NodeLayout {
 		return u"✦ "_q + (prompt.isEmpty()
 			? u"Отвечает ИИ на последнее сообщение"_q
 			: prompt);
+	} else if (type == u"catalog"_q) {
+		return text.isEmpty() ? u"Товары с ценами и кнопкой «В корзину»"_q : text;
+	} else if (type == u"cart"_q) {
+		return text.isEmpty() ? u"Товары в корзине и сумма"_q : text;
+	} else if (type == u"order"_q) {
+		return text.isEmpty() ? u"Создаёт заказ из корзины"_q : text;
+	} else if (type == u"operator"_q) {
+		return text.isEmpty() ? u"Клиент пишет — вы отвечаете"_q : text;
 	}
-	auto text = block.value(u"text"_q).toString().trimmed();
+	auto result = text;
 	const auto media = block.value(u"media"_q).toObject();
 	const auto kind = media.value(u"kind"_q).toString();
 	if (!media.value(u"url"_q).toString().isEmpty()
 		|| !block.value(u"photo"_q).toString().trimmed().isEmpty()) {
-		text = ((kind == u"video"_q)
+		result = ((kind == u"video"_q)
 			? u"🎬 "_q
 			: (kind == u"document"_q)
 			? u"📎 "_q
 			: (kind == u"audio"_q)
 			? u"🎵 "_q
-			: u"🖼 "_q) + text;
+			: u"🖼 "_q) + result;
 	}
-	return text;
+	return result;
 }
 
 [[nodiscard]] QString NextTarget(const QJsonObject &block) {
 	const auto type = BlockType(block);
-	if (type == u"condition"_q) {
+	if (type == u"condition"_q
+		|| type == u"random"_q
+		|| type == u"catalog"_q
+		|| type == u"cart"_q) {
 		return QString();
+	} else if (type == u"order"_q) {
+		const auto payment = block.value(u"payment"_q).toString();
+		return (payment == u"stars"_q || payment == u"card"_q)
+			? QString()
+			: block.value(u"next"_q).toString();
 	} else if (type == u"message"_q && HasInput(block)) {
 		return Input(block).value(u"next"_q).toString();
 	}
@@ -250,12 +523,72 @@ struct NodeLayout {
 		return QColor(0x8a, 0x8f, 0x99);
 	} else if (type == u"ai"_q) {
 		return QColor(0x66, 0x5f, 0xff);
+	} else if (type == u"random"_q) {
+		return QColor(0xd9, 0x4f, 0x9e);
+	} else if (type == u"operator"_q) {
+		return QColor(0x1f, 0xa3, 0x8a);
+	} else if (type == u"catalog"_q) {
+		return QColor(0xf0, 0x62, 0x3e);
+	} else if (type == u"cart"_q) {
+		return QColor(0xc2, 0x47, 0x7a);
+	} else if (type == u"order"_q) {
+		return QColor(0xd4, 0xa0, 0x17);
 	} else if (HasInput(block)) {
 		return kInputColor;
 	} else if (block.value(u"notifyOwner"_q).toBool()) {
 		return kNotifyColor;
 	}
 	return st::windowBgActive->c;
+}
+
+// Sets fields a block of this type needs, keeps the rest.
+void ApplyTypeDefaults(QJsonObject &block, const QString &type) {
+	if (type == u"message"_q) {
+		block.remove(u"type"_q);
+	} else {
+		block.insert(u"type"_q, type);
+	}
+	const auto setDefault = [&](const QString &key, QJsonValue value) {
+		if (!block.contains(key)) {
+			block.insert(key, value);
+		}
+	};
+	if (type == u"condition"_q) {
+		setDefault(u"conditions"_q, QJsonArray{ QJsonObject{
+			{ u"variable"_q, u"ответ"_q },
+			{ u"op"_q, u"eq"_q },
+			{ u"value"_q, QString() },
+		} });
+	} else if (type == u"ai"_q) {
+		setDefault(u"prompt"_q, u"{last_message}"_q);
+	} else if (type == u"action"_q) {
+		setDefault(u"actions"_q, QJsonArray());
+	} else if (type == u"random"_q) {
+		setDefault(u"branches"_q, QJsonArray{
+			QJsonObject{ { u"weight"_q, 50 } },
+			QJsonObject{ { u"weight"_q, 50 } },
+		});
+	} else if (type == u"catalog"_q) {
+		setDefault(u"text"_q, u"🛍 Выберите категорию:"_q);
+	} else if (type == u"cart"_q) {
+		setDefault(u"text"_q, u"🧺 Ваша корзина:"_q);
+	} else if (type == u"order"_q) {
+		setDefault(u"payment"_q, u"none"_q);
+		if (block.value(u"text"_q).toString().isEmpty()) {
+			block.insert(u"text"_q, u"🎉 Заказ №{order_id} на {order_total} "
+				"принят! Мы скоро свяжемся с вами."_q);
+		}
+	} else if (type == u"operator"_q) {
+		if (block.value(u"text"_q).toString().isEmpty()) {
+			block.insert(u"text"_q, u"💬 Напишите ваш вопрос — оператор "
+				"ответит прямо здесь."_q);
+		}
+	}
+}
+
+[[nodiscard]] QString DefaultTitle(const QString &type, int number) {
+	const auto title = KindOf(type).title;
+	return u"%1 %2"_q.arg(title.mid(title.indexOf(' ') + 1)).arg(number);
 }
 
 } // namespace
@@ -353,7 +686,7 @@ NodeLayout FlowCanvas::layout(const QJsonObject &block) const {
 		top += textHeight;
 	}
 
-	const auto rows = BlockRows(block);
+	const auto rows = BlockRows(_state->flow, block);
 	if (!rows.empty()) {
 		top += st::botStudioNodeButtonSkip * 2;
 	}
@@ -488,12 +821,8 @@ void FlowCanvas::paintNode(
 	if (isStart) {
 		badges.push_back(u"▶ старт"_q);
 	}
-	if (type == u"condition"_q) {
-		badges.push_back(u"⑂ условие"_q);
-	} else if (type == u"action"_q) {
-		badges.push_back(u"⚡ действия"_q);
-	} else if (type == u"ai"_q) {
-		badges.push_back(u"✦ ИИ"_q);
+	if (const auto &badge = KindOf(type).badge; !badge.isEmpty()) {
+		badges.push_back(badge);
 	}
 	if (block.value(u"notifyOwner"_q).toBool()) {
 		badges.push_back(u"📩"_q);
@@ -536,7 +865,7 @@ void FlowCanvas::paintNode(
 			text);
 	}
 
-	const auto rows = BlockRows(block);
+	const auto rows = BlockRows(_state->flow, block);
 	const auto buttonFont = style::font(st::botStudioNodeButtonFont);
 	p.setFont(buttonFont);
 	for (auto i = 0; i != int(layout.buttons.size()); ++i) {
@@ -552,15 +881,13 @@ void FlowCanvas::paintNode(
 			: QString();
 		p.setPen(row.warning
 			? st::attentionButtonFg->c
-			: (type == u"action"_q)
-			? st::windowFg->c
-			: st::windowActiveTextFg->c);
+			: (row.button || !row.target.isEmpty())
+			? st::windowActiveTextFg->c
+			: st::windowFg->c);
 		p.drawText(
 			r.marginsRemoved({ 10, 0, 10, 0 }),
 			Qt::AlignVCenter
-				| ((type == u"message"_q || type == u"ai"_q)
-					? Qt::AlignHCenter
-					: Qt::AlignLeft),
+				| (row.button ? Qt::AlignHCenter : Qt::AlignLeft),
 			buttonFont->elided(row.text + suffix, inner - 20));
 	}
 
@@ -623,7 +950,7 @@ void FlowCanvas::paintEvent(QPaintEvent *e) {
 	for (const auto &value : blocks) {
 		const auto block = value.toObject();
 		const auto &l = layouts[block.value(u"id"_q).toString()];
-		const auto rows = BlockRows(block);
+		const auto rows = BlockRows(_state->flow, block);
 		for (auto i = 0; i != int(l.buttons.size()); ++i) {
 			if (const auto rect = targetRect(rows[i].target)) {
 				const auto r = l.buttons[i];
@@ -736,6 +1063,7 @@ FlowEditor::FlowEditor(
 , _state(std::make_shared<FlowState>())
 , _add(MakeButton(this, u"＋ Блок"_q, st::botStudioSmallButton))
 , _settings(MakeButton(this, u"⚙ Команды и ответы"_q, st::botStudioSmallButton))
+, _products(MakeButton(this, u"🛍 Товары"_q, st::botStudioSmallButton))
 , _save(MakeButton(this, u"Сохранить и запустить"_q, st::botStudioActionButton))
 , _status(Ui::CreateChild<Ui::FlatLabel>(this, QString(), st::botStudioHint))
 , _canvasScroll(Ui::CreateChild<Ui::ScrollArea>(this, st::defaultSolidScroll))
@@ -815,17 +1143,19 @@ void FlowEditor::setupToolbar() {
 		const auto menu = Ui::CreateChild<Ui::PopupMenu>(
 			this,
 			st::defaultPopupMenu);
-		for (const auto &[value, title] : std::vector<std::pair<QString, QString>>{
-				{ u"message"_q, u"💬 Сообщение — текст, фото, кнопки, вопрос"_q },
-				{ u"condition"_q, u"⑂ Условие — ветвление по ответам"_q },
-				{ u"ai"_q, u"✦ Ответ ИИ — текст пишет нейросеть"_q },
-				{ u"action"_q, u"⚡ Действия — баллы, уведомления, вебхук"_q } }) {
-			const auto type = value;
-			menu->addAction(title, [=] { addBlock(position, true, type); });
+		for (const auto &kind : BlockKinds()) {
+			if (kind.type == u"catalog"_q) {
+				menu->addSeparator();
+			}
+			const auto type = kind.type;
+			menu->addAction(
+				kind.title + u" — "_q + kind.about,
+				[=] { addBlock(position, true, type); });
 		}
 		menu->popup(QCursor::pos());
 	});
 	_settings->setClickedCallback([=] { showSettings(); });
+	_products->setClickedCallback([=] { showProducts(); });
 	_save->setClickedCallback([=] { save(); });
 }
 
@@ -837,25 +1167,36 @@ void FlowEditor::addBlock(QPoint position, bool select, QString type) {
 		{ u"x"_q, std::max(0, (position.x() / kSnap) * kSnap) },
 		{ u"y"_q, std::max(0, (position.y() / kSnap) * kSnap) },
 	};
-	if (type == u"condition"_q) {
-		block.insert(u"type"_q, type);
-		block.insert(u"title"_q, u"Условие %1"_q.arg(number));
-		block.insert(u"conditions"_q, QJsonArray{ QJsonObject{
-			{ u"variable"_q, u"ответ"_q },
-			{ u"op"_q, u"eq"_q },
-			{ u"value"_q, QString() },
-		} });
-	} else if (type == u"ai"_q) {
-		block.insert(u"type"_q, type);
-		block.insert(u"title"_q, u"Ответ ИИ %1"_q.arg(number));
-		block.insert(u"prompt"_q, u"{last_message}"_q);
-	} else if (type == u"action"_q) {
-		block.insert(u"type"_q, type);
-		block.insert(u"title"_q, u"Действия %1"_q.arg(number));
-		block.insert(u"actions"_q, QJsonArray());
-	} else {
-		block.insert(u"title"_q, u"Сообщение %1"_q.arg(number));
+	if (type.isEmpty()) {
+		type = u"message"_q;
+	}
+	block.insert(u"title"_q, DefaultTitle(type, number));
+	if (type == u"message"_q) {
 		block.insert(u"text"_q, QString());
+	}
+	ApplyTypeDefaults(block, type);
+	// Move down until the new card doesn't cover another one.
+	const auto blocks = FlowBlocks(_state->flow);
+	for (auto attempt = 0; attempt != 60; ++attempt) {
+		const auto x = block.value(u"x"_q).toInt();
+		const auto y = block.value(u"y"_q).toInt();
+		const auto wanted = QRect(x, y, st::botStudioNodeWidth, 150);
+		auto busy = false;
+		for (const auto &value : blocks) {
+			const auto other = value.toObject();
+			const auto rect = _canvas->nodeRect(
+				other.value(u"id"_q).toString()).translated(
+					-st::botStudioCanvasPadding,
+					-st::botStudioCanvasPadding);
+			if (rect.marginsAdded({ 10, 10, 10, 10 }).intersects(wanted)) {
+				busy = true;
+				block.insert(u"y"_q, rect.y() + rect.height() + 30);
+				break;
+			}
+		}
+		if (!busy) {
+			break;
+		}
 	}
 	SetFlowBlock(_state->flow, block);
 	if (select) {
@@ -920,11 +1261,15 @@ void FlowEditor::updateStatus() {
 
 void FlowEditor::rebuildInspector() {
 	const auto id = _state->selected;
+	const auto sameBlock = (_inspected == id);
 	_inspected = id;
 	auto content = object_ptr<Ui::VerticalLayout>(_inspectorScroll);
 	const auto layout = content.data();
 	_inspector = layout;
 	const auto &padding = st::botStudioInspectorPadding;
+	const auto maxWidth = st::botStudioInspectorWidth
+		- padding.left()
+		- padding.right();
 	const auto row = [&](object_ptr<Ui::RpWidget> widget, int top = 0) {
 		return layout->add(
 			std::move(widget),
@@ -973,6 +1318,35 @@ void FlowEditor::rebuildInspector() {
 			changed(result->getLastText());
 		}, result->lifetime());
 		return result;
+	};
+	// A wrapped line of choice chips.
+	const auto chips = [&](
+			std::vector<std::pair<QString, QString>> options,
+			const QString &current,
+			Fn<void(QString)> chosen,
+			int top = 6) {
+		const auto line = row(object_ptr<Ui::RpWidget>(layout), top);
+		auto left = 0;
+		auto y = 0;
+		auto height = 0;
+		for (const auto &[value, title] : options) {
+			const auto chip = MakeButton(
+				line,
+				title,
+				(value == current)
+					? st::botStudioTemplateButtonActive
+					: st::botStudioTemplateButton);
+			if (left && left + chip->width() > maxWidth) {
+				left = 0;
+				y += chip->height() + 6;
+			}
+			chip->moveToLeft(left, y);
+			left += chip->width() + 6;
+			height = y + chip->height();
+			const auto v = value;
+			chip->setClickedCallback([=] { chosen(v); });
+		}
+		line->resize(maxWidth, height);
 	};
 	// A "→ target" chooser: blocks, a new block and optional extra items.
 	const auto target = [=](
@@ -1025,77 +1399,124 @@ void FlowEditor::rebuildInspector() {
 		});
 		return button;
 	};
+	// "Label: → target" line.
+	const auto labeledTarget = [&](
+			const QString &label,
+			const QString &current,
+			Fn<void(QString)> chosen) {
+		const auto after = row(object_ptr<Ui::RpWidget>(layout), 10);
+		const auto afterLabel = Ui::CreateChild<Ui::FlatLabel>(
+			after,
+			label,
+			st::botStudioInspectorLabel);
+		const auto afterTarget = target(
+			after,
+			current,
+			true,
+			std::move(chosen),
+			nullptr);
+		afterLabel->moveToLeft(
+			0,
+			(afterTarget->height() - afterLabel->height()) / 2);
+		afterTarget->moveToLeft(afterLabel->width() + 8, 0);
+		after->resize(
+			afterLabel->width() + 8 + afterTarget->width(),
+			afterTarget->height());
+	};
+	const auto setKey = [=](const QString &key) {
+		return [=](QString chosen) {
+			update([&](QJsonObject &b) {
+				if (chosen.isEmpty()) {
+					b.remove(key);
+				} else {
+					b.insert(key, chosen);
+				}
+			}, true);
+		};
+	};
+	const auto textField = [&](
+			const QString &key,
+			const QString &placeholder,
+			bool multiline) {
+		const auto block = FlowBlock(_state->flow, id);
+		return field(
+			placeholder,
+			block.value(key).toString(),
+			multiline,
+			[=](QString text) {
+				update([&](QJsonObject &b) { b.insert(key, text); }, false);
+			});
+	};
 
 	const auto block = FlowBlock(_state->flow, id);
 	if (block.isEmpty()) {
 		section(u"Схема бота"_q, 18);
-		hint(u"Выберите сообщение на схеме, чтобы изменить его, или "
-			"нажмите «＋ Блок».\n\nСообщения связываются кнопками: "
-			"кнопка ведёт к другому сообщению. Блок может ждать ответ "
-			"пользователя (имя, телефон) и присылать вам заявку."_q);
+		hint(u"Выберите блок на схеме, чтобы изменить его, или нажмите "
+			"«＋ Блок».\n\nСообщения связываются кнопками: кнопка ведёт к "
+			"другому блоку. Для магазина добавьте товары в «🛍 Товары» и "
+			"блоки «Каталог», «Корзина» и «Заказ и оплата»."_q);
 	} else {
 		const auto isStart = (id == _state->flow.value(u"start"_q).toString());
 		const auto type = BlockType(block);
-		const auto typeTitle = (type == u"condition"_q)
-			? u"⑂ Условие"_q
-			: (type == u"action"_q)
-			? u"⚡ Действия"_q
-			: (type == u"ai"_q)
-			? u"✦ Ответ ИИ"_q
-			: u"Сообщение"_q;
-		section(isStart ? (u"▶ Старт · "_q + typeTitle) : typeTitle, 16);
+		const auto &kind = KindOf(type);
+		section(isStart ? (u"▶ Старт · "_q + kind.title) : kind.title, 16);
 		hint((type == u"condition"_q)
-			? u"Проверяет сохранённые ответы и ведёт в нужную ветку. "
-				"Пользователь этот блок не видит."_q
+			? u"Проверяет ответы, подписку на канал, метки или время и ведёт "
+				"в нужную ветку. Пользователь этот блок не видит."_q
 			: (type == u"action"_q)
-			? u"Выполняет действия: записывает значения, считает баллы, "
-				"пишет вам или в канал, отправляет данные на сайт."_q
+			? u"Выполняет действия по порядку: значения, баллы, метки, "
+				"напоминания, уведомления, запросы к сайтам."_q
 			: (type == u"ai"_q)
 			? u"Бот отвечает текстом, который пишет ИИ по вашему заданию."_q
+			: (type == u"random"_q)
+			? u"Случайно выбирает одну из веток: розыгрыши, призы, A/B-тесты."_q
+			: (type == u"operator"_q)
+			? u"Живой чат: клиент пишет боту, вы отвечаете ему из Telegram."_q
+			: (type == u"catalog"_q)
+			? u"Карточки товаров с фото, ценой и кнопкой «В корзину»."_q
+			: (type == u"cart"_q)
+			? u"Показывает корзину: можно менять количество и оформить заказ."_q
+			: (type == u"order"_q)
+			? u"Создаёт заказ из корзины, принимает оплату и присылает заказ "
+				"вам с кнопками статусов."_q
 			: isStart
 			? u"Его бот показывает по команде /start."_q
 			: u"Показывается, когда пользователь нажал ведущую сюда "
 				"кнопку."_q);
 
-		// Block kind switch.
-		const auto kinds = row(object_ptr<Ui::RpWidget>(layout), 8);
+		// Block type.
 		{
-			auto left = 0;
-			auto top = 0;
-			auto height = 0;
-			const auto maxWidth = st::botStudioInspectorWidth
-				- padding.left()
-				- padding.right();
-			for (const auto &[value, title] : std::vector<std::pair<QString, QString>>{
-					{ u"message"_q, u"💬 Сообщение"_q },
-					{ u"condition"_q, u"⑂ Условие"_q },
-					{ u"ai"_q, u"✦ Ответ ИИ"_q },
-					{ u"action"_q, u"⚡ Действия"_q } }) {
-				const auto chip = MakeButton(
-					kinds,
-					title,
-					(type == value)
-						? st::botStudioTemplateButtonActive
-						: st::botStudioTemplateButton);
-				if (left && left + chip->width() > maxWidth) {
-					left = 0;
-					top += chip->height() + 6;
+			const auto line = row(object_ptr<Ui::RpWidget>(layout), 10);
+			const auto label = Ui::CreateChild<Ui::FlatLabel>(
+				line,
+				u"Тип блока:"_q,
+				st::botStudioInspectorLabel);
+			const auto button = MakeButton(
+				line,
+				kind.title + u"  ▾"_q,
+				st::botStudioTargetButton);
+			button->setClickedCallback([=] {
+				const auto menu = Ui::CreateChild<Ui::PopupMenu>(
+					this,
+					st::defaultPopupMenu);
+				for (const auto &entry : BlockKinds()) {
+					const auto chosen = entry.type;
+					menu->addAction(
+						(chosen == type ? u"✓ "_q : QString())
+							+ entry.title
+							+ u" — "_q
+							+ entry.about,
+						[=] {
+							update([&](QJsonObject &b) {
+								ApplyTypeDefaults(b, chosen);
+							}, true);
+						});
 				}
-				chip->moveToLeft(left, top);
-				left += chip->width() + 6;
-				height = top + chip->height();
-				const auto chosen = value;
-				chip->setClickedCallback([=] {
-					update([&](QJsonObject &b) {
-						if (chosen == u"message"_q) {
-							b.remove(u"type"_q);
-						} else {
-							b.insert(u"type"_q, chosen);
-						}
-					}, true);
-				});
-			}
-			kinds->resize(maxWidth, height);
+				menu->popup(QCursor::pos());
+			});
+			label->moveToLeft(0, (button->height() - label->height()) / 2);
+			button->moveToLeft(label->width() + 8, 0);
+			line->resize(label->width() + 8 + button->width(), button->height());
 		}
 
 		field(
@@ -1111,122 +1532,14 @@ void FlowEditor::rebuildInspector() {
 		}
 		const auto variablesHint = u"Подстановки: "_q
 			+ variables.join(u", "_q)
-			+ u", {last_message}, {date}, {time}."_q;
-		// "Label: → target" line.
-		const auto labeledTarget = [=](
-				const QString &label,
-				const QString &current,
-				Fn<void(QString)> chosen) {
-			const auto after = row(object_ptr<Ui::RpWidget>(layout), 10);
-			const auto afterLabel = Ui::CreateChild<Ui::FlatLabel>(
-				after,
-				label,
-				st::botStudioInspectorLabel);
-			const auto afterTarget = target(
-				after,
-				current,
-				true,
-				std::move(chosen),
-				nullptr);
-			afterLabel->moveToLeft(
-				0,
-				(afterTarget->height() - afterLabel->height()) / 2);
-			afterTarget->moveToLeft(afterLabel->width() + 8, 0);
-			after->resize(
-				afterLabel->width() + 8 + afterTarget->width(),
-				afterTarget->height());
-		};
-		const auto setNext = [=](QString chosen) {
-			update([&](QJsonObject &b) {
-				if (chosen.isEmpty()) {
-					b.remove(u"next"_q);
-				} else {
-					b.insert(u"next"_q, chosen);
-				}
-			}, true);
-		};
+			+ u", {last_message}, {date}, {time}"_q
+			+ (HasShop(_state->flow)
+				? u", {cart}, {cart_total}, {cart_count}, {my_orders}."_q
+				: u"."_q);
 
-		if (type == u"message"_q) {
-			field(
-				u"Текст сообщения"_q,
-				block.value(u"text"_q).toString(),
-				true,
-				[=](QString text) {
-					update([&](QJsonObject &b) { b.insert(u"text"_q, text); }, false);
-				});
-			hint(variablesHint + u" Например: «Привет, {first_name}!»"_q);
-
-			// Media attachment.
-			section(u"Вложение"_q);
-			auto media = block.value(u"media"_q).toObject();
-			if (media.isEmpty() && !block.value(u"photo"_q).toString().isEmpty()) {
-				media = QJsonObject{
-					{ u"kind"_q, u"photo"_q },
-					{ u"url"_q, block.value(u"photo"_q).toString() },
-				};
-			}
-			const auto mediaKind = media.value(u"kind"_q).toString().isEmpty()
-				? u"photo"_q
-				: media.value(u"kind"_q).toString();
-			const auto mediaKinds = row(object_ptr<Ui::RpWidget>(layout), 6);
-			{
-				auto left = 0;
-				auto top = 0;
-				auto height = 0;
-				const auto maxWidth = st::botStudioInspectorWidth
-					- padding.left()
-					- padding.right();
-				for (const auto &[value, title] : std::vector<std::pair<QString, QString>>{
-						{ u"photo"_q, u"🖼 Фото"_q },
-						{ u"video"_q, u"🎬 Видео"_q },
-						{ u"document"_q, u"📎 Файл"_q },
-						{ u"audio"_q, u"🎵 Аудио"_q } }) {
-					const auto chip = MakeButton(
-						mediaKinds,
-						title,
-						(mediaKind == value)
-							? st::botStudioTemplateButtonActive
-							: st::botStudioTemplateButton);
-					if (left && left + chip->width() > maxWidth) {
-						left = 0;
-						top += chip->height() + 6;
-					}
-					chip->moveToLeft(left, top);
-					left += chip->width() + 4;
-					height = top + chip->height();
-					const auto chosen = value;
-					chip->setClickedCallback([=] {
-						update([&](QJsonObject &b) {
-							auto m = b.value(u"media"_q).toObject();
-							if (m.isEmpty() && !b.value(u"photo"_q).toString().isEmpty()) {
-								m.insert(u"url"_q, b.value(u"photo"_q).toString());
-							}
-							m.insert(u"kind"_q, chosen);
-							b.remove(u"photo"_q);
-							b.insert(u"media"_q, m);
-						}, true);
-					});
-				}
-				mediaKinds->resize(maxWidth, height);
-			}
-			field(
-				u"Ссылка https://… на файл (необязательно)"_q,
-				media.value(u"url"_q).toString(),
-				false,
-				[=](QString text) {
-					update([&](QJsonObject &b) {
-						auto m = b.value(u"media"_q).toObject();
-						if (!m.contains(u"kind"_q)) {
-							m.insert(u"kind"_q, u"photo"_q);
-						}
-						m.insert(u"url"_q, text.trimmed());
-						b.remove(u"photo"_q);
-						b.insert(u"media"_q, m);
-					}, false);
-				});
-
-			// Buttons.
-			section(u"Кнопки"_q);
+		// Buttons of a block: text and where it leads.
+		const auto buttonsEditor = [&](const QString &title) {
+			section(title);
 			const auto buttons = Buttons(block);
 			for (auto i = 0; i != buttons.size(); ++i) {
 				const auto button = buttons[i].toObject();
@@ -1285,11 +1598,15 @@ void FlowEditor::rebuildInspector() {
 					second = target(
 						line,
 						button.value(u"goto"_q).toString(),
-						false,
+						!block.value(u"saveChoice"_q).toString().isEmpty(),
 						[=](QString chosen) {
 							setButton([&](QJsonObject &o) {
 								o.remove(u"url"_q);
-								o.insert(u"goto"_q, chosen);
+								if (chosen.isEmpty()) {
+									o.remove(u"goto"_q);
+								} else {
+									o.insert(u"goto"_q, chosen);
+								}
 							}, true);
 						},
 						[=] {
@@ -1323,6 +1640,87 @@ void FlowEditor::rebuildInspector() {
 					b.insert(u"buttons"_q, list);
 				}, true);
 			});
+		};
+		const auto productsButton = [&] {
+			const auto count = _state->flow.value(u"products"_q).toArray().size();
+			const auto button = row(object_ptr<Ui::RoundButton>(
+				layout,
+				rpl::single(count
+					? u"🛍 Товары (%1) — изменить"_q.arg(count)
+					: u"🛍 Добавить товары"_q),
+				st::botStudioSmallButton), 10);
+			const auto round = static_cast<Ui::RoundButton*>(button);
+			round->setTextTransform(Ui::RoundButtonTextTransform::NoTransform);
+			round->setClickedCallback([=] { showProducts(); });
+		};
+
+		if (type == u"message"_q) {
+			textField(u"text"_q, u"Текст сообщения"_q, true);
+			hint(variablesHint + u" Например: «Привет, {first_name}!»"_q);
+
+			// Media attachment.
+			section(u"Вложение"_q);
+			auto media = block.value(u"media"_q).toObject();
+			if (media.isEmpty() && !block.value(u"photo"_q).toString().isEmpty()) {
+				media = QJsonObject{
+					{ u"kind"_q, u"photo"_q },
+					{ u"url"_q, block.value(u"photo"_q).toString() },
+				};
+			}
+			chips({
+				{ u"photo"_q, u"🖼 Фото"_q },
+				{ u"video"_q, u"🎬 Видео"_q },
+				{ u"document"_q, u"📎 Файл"_q },
+				{ u"audio"_q, u"🎵 Аудио"_q },
+			}, media.value(u"kind"_q).toString().isEmpty()
+				? u"photo"_q
+				: media.value(u"kind"_q).toString(), [=](QString chosen) {
+				update([&](QJsonObject &b) {
+					auto m = b.value(u"media"_q).toObject();
+					if (m.isEmpty() && !b.value(u"photo"_q).toString().isEmpty()) {
+						m.insert(u"url"_q, b.value(u"photo"_q).toString());
+					}
+					m.insert(u"kind"_q, chosen);
+					b.remove(u"photo"_q);
+					b.insert(u"media"_q, m);
+				}, true);
+			});
+			field(
+				u"Ссылка https://… на файл (необязательно)"_q,
+				media.value(u"url"_q).toString(),
+				false,
+				[=](QString text) {
+					update([&](QJsonObject &b) {
+						auto m = b.value(u"media"_q).toObject();
+						if (!m.contains(u"kind"_q)) {
+							m.insert(u"kind"_q, u"photo"_q);
+						}
+						m.insert(u"url"_q, text.trimmed());
+						b.remove(u"photo"_q);
+						b.insert(u"media"_q, m);
+					}, false);
+				});
+
+			buttonsEditor(u"Кнопки"_q);
+			if (!Buttons(block).isEmpty()) {
+				field(
+					u"Запомнить нажатую кнопку как (необязательно)"_q,
+					block.value(u"saveChoice"_q).toString(),
+					false,
+					[=](QString text) {
+						update([&](QJsonObject &b) {
+							const auto name = text.trimmed()
+								.remove('{').remove('}').replace(' ', '_');
+							if (name.isEmpty()) {
+								b.remove(u"saveChoice"_q);
+							} else {
+								b.insert(u"saveChoice"_q, name);
+							}
+						}, false);
+					});
+				hint(u"Текст нажатой кнопки сохранится в переменную — "
+					"удобно для выбора услуги, размера или времени."_q);
+			}
 
 			// Waiting for an answer.
 			section(u"Ответ пользователя"_q, 18);
@@ -1361,81 +1759,42 @@ void FlowEditor::rebuildInspector() {
 							b.insert(u"input"_q, in);
 						}, false);
 					});
-				const auto kinds = row(object_ptr<Ui::RpWidget>(layout), 8);
-				auto left = 0;
-				auto height = 0;
 				const auto kind = input.value(u"kind"_q).toString();
-				for (const auto &[value, title] : std::vector<std::pair<QString, QString>>{
-						{ u"text"_q, u"Текст"_q },
-						{ u"phone"_q, u"📱 Телефон"_q },
-						{ u"number"_q, u"Число"_q },
-						{ u"email"_q, u"E-mail"_q } }) {
-					const auto chip = MakeButton(
-						kinds,
-						title,
-						(kind == value || (kind.isEmpty() && value == u"text"_q))
-							? st::botStudioTemplateButtonActive
-							: st::botStudioTemplateButton);
-					chip->moveToLeft(left, 0);
-					left += chip->width() + 6;
-					height = chip->height();
-					const auto chosen = value;
-					chip->setClickedCallback([=] {
-						update([&](QJsonObject &b) {
-							auto in = Input(b);
-							in.insert(u"kind"_q, chosen);
-							b.insert(u"input"_q, in);
-						}, true);
-					});
+				chips({
+					{ u"text"_q, u"Текст"_q },
+					{ u"phone"_q, u"📱 Телефон"_q },
+					{ u"number"_q, u"Число"_q },
+					{ u"email"_q, u"E-mail"_q },
+					{ u"location"_q, u"📍 Адрес"_q },
+					{ u"photo"_q, u"📷 Фото"_q },
+				}, kind.isEmpty() ? u"text"_q : kind, [=](QString chosen) {
+					update([&](QJsonObject &b) {
+						auto in = Input(b);
+						in.insert(u"kind"_q, chosen);
+						b.insert(u"input"_q, in);
+					}, true);
+				}, 8);
+				if (kind == u"location"_q) {
+					hint(u"Бот покажет кнопку «📍 Отправить геопозицию», "
+						"адрес можно и написать."_q);
+				} else if (kind == u"photo"_q) {
+					hint(u"Фото придёт вам вместе с заявкой."_q);
 				}
-				kinds->resize(left, height);
-				const auto after = row(object_ptr<Ui::RpWidget>(layout), 10);
-				const auto afterLabel = Ui::CreateChild<Ui::FlatLabel>(
-					after,
+				labeledTarget(
 					u"После ответа:"_q,
-					st::botStudioInspectorLabel);
-				const auto afterTarget = target(
-					after,
 					input.value(u"next"_q).toString(),
-					true,
 					[=](QString chosen) {
 						update([&](QJsonObject &b) {
 							auto in = Input(b);
 							in.insert(u"next"_q, chosen);
 							b.insert(u"input"_q, in);
 						}, true);
-					},
-					nullptr);
-				afterLabel->moveToLeft(0, (afterTarget->height() - afterLabel->height()) / 2);
-				afterTarget->moveToLeft(afterLabel->width() + 8, 0);
-				after->resize(
-					afterLabel->width() + 8 + afterTarget->width(),
-					afterTarget->height());
+					});
 			} else if (Buttons(block).isEmpty()) {
-				const auto after = row(object_ptr<Ui::RpWidget>(layout), 10);
-				const auto afterLabel = Ui::CreateChild<Ui::FlatLabel>(
-					after,
+				labeledTarget(
 					u"Затем сразу показать:"_q,
-					st::botStudioInspectorLabel);
-				const auto afterTarget = target(
-					after,
 					block.value(u"next"_q).toString(),
-					true,
-					[=](QString chosen) {
-						update([&](QJsonObject &b) {
-							if (chosen.isEmpty()) {
-								b.remove(u"next"_q);
-							} else {
-								b.insert(u"next"_q, chosen);
-							}
-						}, true);
-					},
-					nullptr);
-				afterLabel->moveToLeft(0, (afterTarget->height() - afterLabel->height()) / 2);
-				afterTarget->moveToLeft(afterLabel->width() + 8, 0);
-				after->resize(
-					afterLabel->width() + 8 + afterTarget->width(),
-					afterTarget->height());
+					setKey(u"next"_q));
 			}
 
 			section(u"Заявки"_q, 18);
@@ -1472,6 +1831,10 @@ void FlowEditor::rebuildInspector() {
 						}
 					}, rebuild);
 				};
+				const auto op = condition.value(u"op"_q).toString().isEmpty()
+					? u"eq"_q
+					: condition.value(u"op"_q).toString();
+				const auto noVariable = OperatorWithoutVariable(op);
 				const auto line = row(object_ptr<Ui::RpWidget>(layout), 8);
 				const auto variable = Ui::CreateChild<Ui::InputField>(
 					line,
@@ -1484,12 +1847,10 @@ void FlowEditor::rebuildInspector() {
 						o.insert(u"variable"_q, value);
 					}, false);
 				}, variable->lifetime());
-				const auto op = condition.value(u"op"_q).toString().isEmpty()
-					? u"eq"_q
-					: condition.value(u"op"_q).toString();
+				variable->setVisible(!noVariable);
 				const auto opButton = MakeButton(
 					line,
-					OperatorText(op),
+					OperatorText(op) + u" ▾"_q,
 					st::botStudioTargetButton);
 				opButton->setClickedCallback([=] {
 					const auto menu = Ui::CreateChild<Ui::PopupMenu>(
@@ -1502,11 +1863,18 @@ void FlowEditor::rebuildInspector() {
 							{ u"gt"_q, u"> больше (число)"_q },
 							{ u"lt"_q, u"< меньше (число)"_q },
 							{ u"filled"_q, u"заполнено"_q },
-							{ u"empty"_q, u"пусто"_q } }) {
+							{ u"empty"_q, u"пусто"_q },
+							{ u"member"_q, u"📢 подписан на канал"_q },
+							{ u"tag"_q, u"🏷 есть метка"_q },
+							{ u"hours"_q, u"🕘 сейчас рабочее время"_q } }) {
 						const auto chosen = value;
 						menu->addAction(title, [=] {
 							setCondition([&](QJsonObject &o) {
 								o.insert(u"op"_q, chosen);
+								if (chosen == u"hours"_q
+									&& o.value(u"value"_q).toString().isEmpty()) {
+									o.insert(u"value"_q, u"пн-пт 9:00-18:00"_q);
+								}
 							}, true);
 						});
 					}
@@ -1515,7 +1883,13 @@ void FlowEditor::rebuildInspector() {
 				const auto value = Ui::CreateChild<Ui::InputField>(
 					line,
 					st::botStudioField,
-					rpl::single(u"Значение"_q),
+					rpl::single((op == u"member"_q)
+						? u"@канал или id"_q
+						: (op == u"tag"_q)
+						? u"Метка, например: vip"_q
+						: (op == u"hours"_q)
+						? u"пн-пт 9:00-18:00"_q
+						: u"Значение"_q),
 					condition.value(u"value"_q).toString());
 				value->changes() | rpl::on_next([=] {
 					const auto text = value->getLastText();
@@ -1548,12 +1922,19 @@ void FlowEditor::rebuildInspector() {
 				});
 				line->widthValue() | rpl::on_next([=](int width) {
 					const auto removeWidth = remove->width();
-					const auto fieldWidth = (width - removeWidth - opButton->width() - 16) / 2;
-					variable->resize(fieldWidth, variable->height());
-					variable->moveToLeft(0, 0);
-					opButton->moveToLeft(fieldWidth + 6, 18);
-					value->resize(fieldWidth, value->height());
-					value->moveToLeft(fieldWidth + 12 + opButton->width(), 0);
+					if (noVariable) {
+						opButton->moveToLeft(0, 18);
+						const auto left = opButton->width() + 6;
+						value->resize(width - removeWidth - left - 4, value->height());
+						value->moveToLeft(left, 0);
+					} else {
+						const auto fieldWidth = (width - removeWidth - opButton->width() - 16) / 2;
+						variable->resize(fieldWidth, variable->height());
+						variable->moveToLeft(0, 0);
+						opButton->moveToLeft(fieldWidth + 6, 18);
+						value->resize(fieldWidth, value->height());
+						value->moveToLeft(fieldWidth + 12 + opButton->width(), 0);
+					}
 					remove->moveToLeft(width - removeWidth, 14);
 					to->moveToLeft(0, variable->height() + 2);
 					line->resize(width, variable->height() + 2 + to->height() + 4);
@@ -1574,35 +1955,94 @@ void FlowEditor::rebuildInspector() {
 					b.insert(u"conditions"_q, list);
 				}, true);
 			});
-			hint(variablesHint, 8);
+			hint(variablesHint
+				+ u"\n«Подписан на канал»: добавьте бота администратором "
+				"канала. «Рабочее время» — по часам этого компьютера."_q, 8);
 			labeledTarget(
 				u"Иначе:"_q,
 				block.value(u"else"_q).toString(),
-				[=](QString chosen) {
+				setKey(u"else"_q));
+		} else if (type == u"random"_q) {
+			section(u"Варианты"_q);
+			hint(u"Вес — как часто выпадает ветка: 50 и 50 — поровну, "
+				"10 и 90 — редко и часто."_q);
+			const auto branches = block.value(u"branches"_q).toArray();
+			for (auto i = 0; i != branches.size(); ++i) {
+				const auto branch = branches[i].toObject();
+				const auto setBranch = [=](Fn<void(QJsonObject&)> change, bool rebuild) {
 					update([&](QJsonObject &b) {
-						if (chosen.isEmpty()) {
-							b.remove(u"else"_q);
-						} else {
-							b.insert(u"else"_q, chosen);
+						auto list = b.value(u"branches"_q).toArray();
+						if (i < list.size()) {
+							auto object = list[i].toObject();
+							change(object);
+							list[i] = object;
+							b.insert(u"branches"_q, list);
 						}
+					}, rebuild);
+				};
+				const auto line = row(object_ptr<Ui::RpWidget>(layout), 6);
+				const auto weight = Ui::CreateChild<Ui::InputField>(
+					line,
+					st::botStudioField,
+					rpl::single(u"Вес"_q),
+					QString::number(branch.value(u"weight"_q).toDouble(1.)));
+				weight->changes() | rpl::on_next([=] {
+					const auto value = weight->getLastText().trimmed()
+						.replace(',', '.').toDouble();
+					setBranch([&](QJsonObject &o) {
+						o.insert(u"weight"_q, std::max(value, 0.));
+					}, false);
+				}, weight->lifetime());
+				const auto to = target(
+					line,
+					branch.value(u"goto"_q).toString(),
+					false,
+					[=](QString chosen) {
+						setBranch([&](QJsonObject &o) {
+							o.insert(u"goto"_q, chosen);
+						}, true);
+					},
+					nullptr);
+				const auto remove = Ui::CreateChild<Ui::IconButton>(
+					line,
+					st::botStudioRemoveButton);
+				remove->setClickedCallback([=] {
+					update([&](QJsonObject &b) {
+						auto list = b.value(u"branches"_q).toArray();
+						if (i < list.size()) {
+							list.removeAt(i);
+						}
+						b.insert(u"branches"_q, list);
 					}, true);
 				});
+				line->widthValue() | rpl::on_next([=](int width) {
+					weight->resize(70, weight->height());
+					weight->moveToLeft(0, 0);
+					to->moveToLeft(80, 18);
+					remove->moveToLeft(width - remove->width(), 14);
+					line->resize(width, weight->height() + 4);
+				}, line->lifetime());
+			}
+			const auto addBranch = row(object_ptr<Ui::LinkButton>(
+				layout,
+				u"＋ Добавить вариант"_q), 8);
+			static_cast<Ui::LinkButton*>(addBranch)->setClickedCallback([=] {
+				update([&](QJsonObject &b) {
+					auto list = b.value(u"branches"_q).toArray();
+					list.push_back(QJsonObject{ { u"weight"_q, 50 } });
+					b.insert(u"branches"_q, list);
+				}, true);
+			});
 		} else if (type == u"ai"_q) {
 			section(u"Задание для ИИ"_q);
-			field(
+			textField(
+				u"prompt"_q,
 				u"Что написать (например: «Ответь на вопрос {last_message}»)"_q,
-				block.value(u"prompt"_q).toString(),
-				true,
-				[=](QString text) {
-					update([&](QJsonObject &b) { b.insert(u"prompt"_q, text); }, false);
-				});
-			field(
+				true);
+			textField(
+				u"system"_q,
 				u"Роль ИИ (необязательно): «Ты вежливый консультант салона»"_q,
-				block.value(u"system"_q).toString(),
-				true,
-				[=](QString text) {
-					update([&](QJsonObject &b) { b.insert(u"system"_q, text); }, false);
-				});
+				true);
 			hint(variablesHint + u" Используется ИИ, настроенный в "
 				"Agentgram."_q);
 			field(
@@ -1629,14 +2069,17 @@ void FlowEditor::rebuildInspector() {
 			labeledTarget(
 				u"Затем показать:"_q,
 				block.value(u"next"_q).toString(),
-				setNext);
+				setKey(u"next"_q));
 		} else if (type == u"action"_q) {
 			section(u"Действия по порядку"_q);
 			const auto actions = block.value(u"actions"_q).toArray();
 			for (auto i = 0; i != actions.size(); ++i) {
 				const auto action = actions[i].toObject();
 				const auto kind = action.value(u"kind"_q).toString();
-				const auto setAction = [=](const QString &key, const QString &value) {
+				const auto setAction = [=](
+						const QString &key,
+						QJsonValue value,
+						bool rebuild) {
 					update([&](QJsonObject &b) {
 						auto list = b.value(u"actions"_q).toArray();
 						if (i < list.size()) {
@@ -1645,26 +2088,12 @@ void FlowEditor::rebuildInspector() {
 							list[i] = object;
 							b.insert(u"actions"_q, list);
 						}
-					}, false);
+					}, rebuild);
 				};
-				const auto head = row(object_ptr<Ui::RpWidget>(layout), 10);
+				const auto head = row(object_ptr<Ui::RpWidget>(layout), 12);
 				const auto label = Ui::CreateChild<Ui::FlatLabel>(
 					head,
-					ActionText(QJsonObject{ { u"kind"_q, kind } }).section(' ', 0, 0)
-						+ u" "_q
-						+ ((kind == u"set"_q)
-							? u"Записать значение"_q
-							: (kind == u"increment"_q)
-							? u"Прибавить к числу"_q
-							: (kind == u"clear"_q)
-							? u"Очистить ответы"_q
-							: (kind == u"notify"_q)
-							? u"Написать мне"_q
-							: (kind == u"send"_q)
-							? u"Отправить в чат или канал"_q
-							: (kind == u"webhook"_q)
-							? u"Отправить данные на сайт"_q
-							: u"Сохранить заявку в таблицу"_q),
+					ActionTitle(kind),
 					st::botStudioInspectorSection);
 				const auto remove = Ui::CreateChild<Ui::IconButton>(
 					head,
@@ -1688,10 +2117,10 @@ void FlowEditor::rebuildInspector() {
 						const QString &key,
 						const QString &placeholder,
 						bool multiline) {
-					field(placeholder, action.value(key).toString(), multiline, [=](QString text) {
+					field(placeholder, action.value(key).toVariant().toString(), multiline, [=](QString text) {
 						setAction(key, (key == u"variable"_q)
 							? text.trimmed().remove('{').remove('}').replace(' ', '_')
-							: text);
+							: text, false);
 					});
 				};
 				if (kind == u"set"_q || kind == u"increment"_q) {
@@ -1702,6 +2131,77 @@ void FlowEditor::rebuildInspector() {
 							? u"Значение (можно с {подстановками})"_q
 							: u"Сколько прибавить (по умолчанию 1)"_q,
 						false);
+				} else if (kind == u"calc"_q) {
+					actionField(u"variable"_q, u"Куда записать результат: сумма"_q, false);
+					actionField(u"value"_q, u"Формула: {кол} * 250 + 300"_q, false);
+					hint(u"Числа, + − * / %, скобки и {переменные}."_q);
+				} else if (kind == u"tag"_q || kind == u"untag"_q) {
+					actionField(u"value"_q, u"Метка, например: vip, купил, курс"_q, false);
+					hint(u"По меткам работают условия и рассылка только нужным "
+						"людям во вкладке «Аудитория»."_q);
+				} else if (kind == u"remind"_q) {
+					actionField(u"value"_q, u"Через сколько: 30"_q, false);
+					chips({
+						{ u"min"_q, u"минут"_q },
+						{ u"hour"_q, u"часов"_q },
+						{ u"day"_q, u"дней"_q },
+					}, action.value(u"unit"_q).toString().isEmpty()
+						? u"min"_q
+						: action.value(u"unit"_q).toString(), [=](QString chosen) {
+						setAction(u"unit"_q, chosen, true);
+					});
+					labeledTarget(
+						u"Показать:"_q,
+						action.value(u"goto"_q).toString(),
+						[=](QString chosen) { setAction(u"goto"_q, chosen, true); });
+					hint(u"Бот сам напишет пользователю позже. Если Agentgram в "
+						"это время закрыт, напоминание придёт, как только вы его "
+						"откроете."_q);
+				} else if (kind == u"cancel_reminders"_q) {
+					hint(u"Отменяет все запланированные напоминания этого "
+						"пользователя."_q);
+				} else if (kind == u"add_to_cart"_q) {
+					const auto line = row(object_ptr<Ui::RpWidget>(layout), 8);
+					const auto current = action.value(u"product"_q).toString();
+					const auto title = ProductTitle(_state->flow, current);
+					const auto button = MakeButton(
+						line,
+						(title.isEmpty() ? u"⚠ выберите товар"_q : title) + u"  ▾"_q,
+						st::botStudioTargetButton);
+					button->setClickedCallback([=] {
+						const auto menu = Ui::CreateChild<Ui::PopupMenu>(
+							this,
+							st::defaultPopupMenu);
+						for (const auto &value : _state->flow.value(u"products"_q).toArray()) {
+							const auto product = value.toObject();
+							const auto key = FlowProductKey(product);
+							menu->addAction(
+								(key == current ? u"✓ "_q : QString())
+									+ product.value(u"title"_q).toString(),
+								[=] { setAction(u"product"_q, key, true); });
+						}
+						menu->addSeparator();
+						menu->addAction(u"🛍 Изменить товары…"_q, [=] {
+							showProducts();
+						});
+						menu->popup(QCursor::pos());
+					});
+					line->resize(button->width(), button->height());
+					actionField(u"value"_q, u"Количество (по умолчанию 1)"_q, false);
+				} else if (kind == u"request"_q) {
+					actionField(u"url"_q, u"Адрес https://api…/?q={ответ}"_q, false);
+					chips({
+						{ u"GET"_q, u"GET"_q },
+						{ u"POST"_q, u"POST с ответами"_q },
+					}, action.value(u"method"_q).toString().isEmpty()
+						? u"GET"_q
+						: action.value(u"method"_q).toString(), [=](QString chosen) {
+						setAction(u"method"_q, chosen, true);
+					});
+					actionField(u"variable"_q, u"Сохранить ответ как: курс"_q, false);
+					actionField(u"path"_q, u"Поле из JSON, например: data.price"_q, false);
+					hint(u"Подходит для курса валют, погоды, статуса заказа на "
+						"сайте. Без поля сохраняется весь ответ."_q);
 				} else if (kind == u"notify"_q) {
 					actionField(
 						u"text"_q,
@@ -1724,38 +2224,156 @@ void FlowEditor::rebuildInspector() {
 			}
 			const auto addAction = row(object_ptr<Ui::LinkButton>(
 				layout,
-				u"＋ Добавить действие"_q), 10);
+				u"＋ Добавить действие"_q), 12);
 			static_cast<Ui::LinkButton*>(addAction)->setClickedCallback([=] {
 				const auto menu = Ui::CreateChild<Ui::PopupMenu>(
 					this,
 					st::defaultPopupMenu);
-				for (const auto &[value, title] : std::vector<std::pair<QString, QString>>{
-						{ u"set"_q, u"✎ Записать значение"_q },
-						{ u"increment"_q, u"➕ Прибавить к числу (баллы, счётчик)"_q },
-						{ u"notify"_q, u"📩 Написать мне"_q },
-						{ u"send"_q, u"📢 Отправить в чат или канал"_q },
-						{ u"webhook"_q, u"🌐 Отправить данные на сайт (вебхук)"_q },
-						{ u"save_lead"_q, u"🗂 Сохранить заявку в таблицу"_q },
-						{ u"clear"_q, u"🧹 Очистить ответы пользователя"_q } }) {
-					const auto chosen = value;
-					menu->addAction(title, [=] {
-						update([&](QJsonObject &b) {
-							auto list = b.value(u"actions"_q).toArray();
-							auto object = QJsonObject{ { u"kind"_q, chosen } };
-							if (chosen == u"increment"_q) {
-								object.insert(u"value"_q, u"1"_q);
-							}
-							list.push_back(object);
-							b.insert(u"actions"_q, list);
-						}, true);
-					});
+				const auto groups = std::vector<std::vector<QString>>{
+					{ u"set"_q, u"increment"_q, u"calc"_q, u"clear"_q },
+					{ u"tag"_q, u"untag"_q, u"remind"_q, u"cancel_reminders"_q },
+					{ u"notify"_q, u"send"_q, u"save_lead"_q, u"webhook"_q, u"request"_q },
+					{ u"add_to_cart"_q, u"clear_cart"_q },
+				};
+				for (const auto &group : groups) {
+					if (!menu->actions().empty()) {
+						menu->addSeparator();
+					}
+					for (const auto &value : group) {
+						const auto chosen = value;
+						menu->addAction(ActionTitle(chosen), [=] {
+							update([&](QJsonObject &b) {
+								auto list = b.value(u"actions"_q).toArray();
+								auto object = QJsonObject{ { u"kind"_q, chosen } };
+								if (chosen == u"increment"_q) {
+									object.insert(u"value"_q, u"1"_q);
+								} else if (chosen == u"remind"_q) {
+									object.insert(u"value"_q, u"30"_q);
+									object.insert(u"unit"_q, u"min"_q);
+								}
+								list.push_back(object);
+								b.insert(u"actions"_q, list);
+							}, true);
+						});
+					}
 				}
 				menu->popup(QCursor::pos());
 			});
 			labeledTarget(
 				u"Затем показать:"_q,
 				block.value(u"next"_q).toString(),
-				setNext);
+				setKey(u"next"_q));
+		} else if (type == u"catalog"_q) {
+			textField(u"text"_q, u"Заголовок: «🛍 Выберите категорию:»"_q, true);
+			productsButton();
+			const auto categories = ProductCategories(_state->flow);
+			if (!categories.isEmpty()) {
+				section(u"Что показывать"_q);
+				auto options = std::vector<std::pair<QString, QString>>{
+					{ QString(), u"Все категории"_q },
+				};
+				for (const auto &category : categories) {
+					options.emplace_back(category, category);
+				}
+				chips(options, block.value(u"category"_q).toString(), [=](QString chosen) {
+					update([&](QJsonObject &b) {
+						if (chosen.isEmpty()) {
+							b.remove(u"category"_q);
+						} else {
+							b.insert(u"category"_q, chosen);
+						}
+					}, true);
+				});
+				hint((categories.size() > 1 && block.value(u"category"_q).toString().isEmpty())
+					? u"Сначала бот покажет кнопки категорий, затем карточки "
+						"товаров с листанием ◀️ ▶️."_q
+					: u"Бот покажет карточки товаров с листанием ◀️ ▶️."_q);
+			}
+			labeledTarget(
+				u"Кнопка «🧺 Корзина»:"_q,
+				block.value(u"cart"_q).toString(),
+				setKey(u"cart"_q));
+			hint(u"Если не выбрано — ведёт в первый блок «Корзина»."_q);
+			buttonsEditor(u"Дополнительные кнопки"_q);
+		} else if (type == u"cart"_q) {
+			textField(u"text"_q, u"Заголовок: «🧺 Ваша корзина:»"_q, false);
+			textField(u"emptyText"_q, u"Если корзина пуста: «🧺 Корзина пуста.»"_q, false);
+			labeledTarget(
+				u"«Оформить заказ»:"_q,
+				block.value(u"checkout"_q).toString(),
+				setKey(u"checkout"_q));
+			hint(u"Обычно ведёт к вопросам «Как вас зовут?», «Телефон», "
+				"«Адрес» и затем к блоку «Заказ и оплата»."_q);
+			labeledTarget(
+				u"Кнопка «В каталог»:"_q,
+				block.value(u"catalog"_q).toString(),
+				setKey(u"catalog"_q));
+			hint(u"Доставка, бесплатная доставка от суммы, минимальный заказ "
+				"и валюта — в «🛍 Товары»."_q);
+			productsButton();
+			buttonsEditor(u"Дополнительные кнопки"_q);
+		} else if (type == u"order"_q) {
+			section(u"Оплата"_q);
+			const auto payment = block.value(u"payment"_q).toString();
+			chips({
+				{ u"none"_q, u"💵 При получении"_q },
+				{ u"stars"_q, u"⭐ Звёзды Telegram"_q },
+				{ u"card"_q, u"💳 Картой"_q },
+			}, (payment == u"stars"_q || payment == u"card"_q)
+				? payment
+				: u"none"_q, [=](QString chosen) {
+				update([&](QJsonObject &b) {
+					b.insert(u"payment"_q, chosen);
+				}, true);
+			});
+			hint((payment == u"stars"_q)
+				? u"Покупатель оплатит звёздами прямо в Telegram — без "
+					"договоров и платёжных систем. Цены в ⭐ или курс "
+					"звезды задаются в «🛍 Товары»."_q
+				: (payment == u"card"_q)
+				? u"Подключите оплату в @BotFather → Bot Settings → Payments "
+					"и вставьте платёжный токен в «🛍 Товары»."_q
+				: u"Заказ сразу придёт вам в Telegram с кнопками статусов, "
+					"покупатель получит уведомление о каждом статусе."_q);
+			section(u"Сообщение покупателю"_q);
+			textField(u"text"_q, u"После оформления заказа"_q, true);
+			hint(u"{order_id} — номер заказа, {order_total} — сумма, "
+				"{order_items} — состав. "_q + variablesHint);
+			if (payment == u"stars"_q || payment == u"card"_q) {
+				labeledTarget(
+					u"После оплаты:"_q,
+					block.value(u"paid"_q).toString(),
+					setKey(u"paid"_q));
+			} else {
+				labeledTarget(
+					u"Затем показать:"_q,
+					block.value(u"next"_q).toString(),
+					setKey(u"next"_q));
+			}
+			labeledTarget(
+				u"Если корзина пуста:"_q,
+				block.value(u"empty"_q).toString(),
+				setKey(u"empty"_q));
+			productsButton();
+			buttonsEditor(u"Кнопки под сообщением"_q);
+		} else if (type == u"operator"_q) {
+			textField(u"text"_q, u"Сообщение клиенту"_q, true);
+			textField(
+				u"chat"_q,
+				u"Куда слать вопросы: пусто — вам, или @группа / id"_q,
+				false);
+			textField(
+				u"endText"_q,
+				u"Кнопка завершения: «✖️ Завершить диалог»"_q,
+				false);
+			hint(u"Сообщения клиента придут вам от бота. Ответьте на них "
+				"(reply) — бот перешлёт ответ клиенту: текст, фото, файлы, "
+				"голосовые. Чтобы бот мог вам писать, откройте его и нажмите "
+				"/start. Команда /start у клиента тоже завершает диалог."_q);
+			labeledTarget(
+				u"После завершения:"_q,
+				block.value(u"next"_q).toString(),
+				setKey(u"next"_q));
 		}
 
 		// Pause before the block.
@@ -1817,7 +2435,7 @@ void FlowEditor::rebuildInspector() {
 	const auto scrollTop = _inspectorScroll->scrollTop();
 	_inspectorScroll->setOwnedWidget(std::move(content));
 	layout->resizeToWidth(_inspectorScroll->width());
-	if (_inspected == id) {
+	if (sameBlock) {
 		_inspectorScroll->scrollToY(scrollTop);
 	}
 	_canvas->update();
@@ -2131,6 +2749,272 @@ void FlowEditor::showSettings() {
 	}));
 }
 
+void FlowEditor::showProducts() {
+	const auto state = _state;
+	const auto draft = std::make_shared<QJsonObject>(state->flow);
+	_layers->showBox(Box([=](not_null<Ui::GenericBox*> box) {
+		box->setTitle(rpl::single(u"Товары и магазин"_q));
+		const auto boxWidth = st::boxWideWidth + st::boxWideWidth / 3;
+		box->setWidth(boxWidth);
+		box->setMaxHeight(st::boxMaxListHeight * 2);
+		const auto innerWidth = boxWidth
+			- st::boxRowPadding.left()
+			- st::boxRowPadding.right();
+		const auto content = box->verticalLayout();
+		const auto rebuild = std::make_shared<Fn<void()>>();
+		const auto holder = box->addRow(object_ptr<Ui::VerticalLayout>(box));
+		const auto number = [](const QString &text) {
+			return text.trimmed().replace(',', '.').remove(' ').toDouble();
+		};
+		const auto shopValue = [=](const QString &key) {
+			const auto value = draft->value(u"shop"_q).toObject().value(key);
+			return value.isDouble()
+				? (value.toDouble() > 0 ? QString::number(value.toDouble()) : QString())
+				: value.toString();
+		};
+		const auto setShop = [=](const QString &key, QJsonValue value) {
+			auto shop = draft->value(u"shop"_q).toObject();
+			if ((value.isDouble() && value.toDouble() <= 0.)
+				|| (value.isString() && value.toString().trimmed().isEmpty())) {
+				shop.remove(key);
+			} else {
+				shop.insert(key, value);
+			}
+			draft->insert(u"shop"_q, shop);
+		};
+		*rebuild = [=] {
+			while (holder->count()) {
+				delete holder->widgetAt(0);
+			}
+			const auto addLabel = [&](const QString &text, const style::FlatLabel &st, int top) {
+				holder->add(
+					object_ptr<Ui::FlatLabel>(holder, text, st),
+					QMargins(0, top, 0, 4));
+			};
+			const auto makeField = [&](
+					not_null<QWidget*> parent,
+					const QString &placeholder,
+					const QString &value,
+					Fn<void(QString)> changed) {
+				const auto result = Ui::CreateChild<Ui::InputField>(
+					parent.get(),
+					st::botStudioField,
+					rpl::single(placeholder),
+					value);
+				result->changes() | rpl::on_next([=] {
+					changed(result->getLastText());
+				}, result->lifetime());
+				return result;
+			};
+			// Several fields in one line with the given width shares.
+			const auto fieldsLine = [&](
+					std::vector<std::tuple<QString, QString, Fn<void(QString)>, int>> fields,
+					Fn<void()> remove = nullptr) {
+				const auto line = holder->add(
+					object_ptr<Ui::RpWidget>(holder),
+					QMargins(0, 2, 0, 2));
+				auto widgets = std::vector<std::pair<Ui::InputField*, int>>();
+				for (const auto &[placeholder, value, changed, share] : fields) {
+					widgets.emplace_back(
+						makeField(line, placeholder, value, changed),
+						share);
+				}
+				Ui::IconButton *removeButton = nullptr;
+				if (remove) {
+					removeButton = Ui::CreateChild<Ui::IconButton>(
+						line,
+						st::botStudioRemoveButton);
+					removeButton->setClickedCallback(remove);
+				}
+				line->widthValue() | rpl::on_next([=](int width) {
+					const auto skip = 8;
+					const auto available = width
+						- (removeButton ? removeButton->width() + skip : 0)
+						- skip * (int(widgets.size()) - 1);
+					auto total = 0;
+					for (const auto &[widget, share] : widgets) {
+						total += share;
+					}
+					auto left = 0;
+					auto height = 0;
+					for (const auto &[widget, share] : widgets) {
+						const auto w = available * share / std::max(total, 1);
+						widget->resize(w, widget->height());
+						widget->moveToLeft(left, 0);
+						left += w + skip;
+						height = std::max(height, widget->height());
+					}
+					if (removeButton) {
+						removeButton->moveToLeft(width - removeButton->width(), 14);
+					}
+					line->resize(width, height);
+				}, line->lifetime());
+				line->resizeToWidth(innerWidth);
+			};
+
+			addLabel(u"Магазин"_q, st::botStudioInspectorSection, 4);
+			addLabel(u"Валюта цен"_q, st::botStudioInspectorLabel, 4);
+			const auto currency = ShopCurrency(*draft);
+			{
+				const auto line = holder->add(
+					object_ptr<Ui::RpWidget>(holder),
+					QMargins(0, 2, 0, 6));
+				auto left = 0;
+				auto top = 0;
+				auto height = 0;
+				for (const auto &[value, title] : std::vector<std::pair<QString, QString>>{
+						{ u"RUB"_q, u"₽ RUB"_q },
+						{ u"USD"_q, u"$ USD"_q },
+						{ u"EUR"_q, u"€ EUR"_q },
+						{ u"KZT"_q, u"₸ KZT"_q },
+						{ u"UAH"_q, u"₴ UAH"_q },
+						{ u"BYN"_q, u"Br BYN"_q },
+						{ u"UZS"_q, u"сум UZS"_q },
+						{ u"XTR"_q, u"⭐ Звёзды"_q } }) {
+					const auto chip = MakeButton(
+						line,
+						title,
+						(value == currency)
+							? st::botStudioTemplateButtonActive
+							: st::botStudioTemplateButton);
+					if (left && left + chip->width() > innerWidth) {
+						left = 0;
+						top += chip->height() + 6;
+					}
+					chip->moveToLeft(left, top);
+					left += chip->width() + 6;
+					height = top + chip->height();
+					const auto v = value;
+					chip->setClickedCallback([=] {
+						setShop(u"currency"_q, v);
+						crl::on_main(box, [=] { (*rebuild)(); });
+					});
+				}
+				line->resize(innerWidth, height);
+			}
+			fieldsLine({
+				{ u"Доставка"_q, shopValue(u"delivery"_q), [=](QString v) { setShop(u"delivery"_q, number(v)); }, 1 },
+				{ u"Бесплатно от"_q, shopValue(u"freeFrom"_q), [=](QString v) { setShop(u"freeFrom"_q, number(v)); }, 1 },
+				{ u"Мин. заказ"_q, shopValue(u"minOrder"_q), [=](QString v) { setShop(u"minOrder"_q, number(v)); }, 1 },
+			});
+			fieldsLine({
+				{ u"Куда слать заказы: пусто — вам, или @группа"_q, shopValue(u"ordersChat"_q), [=](QString v) { setShop(u"ordersChat"_q, v.trimmed()); }, 1 },
+			});
+			addLabel(
+				u"Заказы приходят с кнопками статусов: «Принят», «В пути», "
+				"«Выполнен», «Отменён» — покупатель получает уведомление. "
+				"Команда /admin в боте показывает вам статистику."_q,
+				st::botStudioInspectorLabel,
+				0);
+
+			addLabel(u"Онлайн-оплата"_q, st::botStudioInspectorSection, 12);
+			if (currency != u"XTR"_q) {
+				fieldsLine({
+					{ u"Цена одной звезды в вашей валюте, например 1.8"_q, shopValue(u"starsRate"_q), [=](QString v) { setShop(u"starsRate"_q, number(v)); }, 1 },
+				});
+			}
+			fieldsLine({
+				{ u"Платёжный токен для карт из @BotFather"_q, shopValue(u"providerToken"_q), [=](QString v) { setShop(u"providerToken"_q, v.trimmed()); }, 1 },
+			});
+			addLabel(
+				u"Звёзды Telegram работают сразу, без договоров. Для карт "
+				"подключите ЮKassa, Stripe или другого провайдера в "
+				"@BotFather. Способ оплаты выбирается в блоке «Заказ и "
+				"оплата»."_q,
+				st::botStudioInspectorLabel,
+				0);
+
+			const auto products = draft->value(u"products"_q).toArray();
+			addLabel(
+				u"Товары (%1)"_q.arg(products.size()),
+				st::botStudioInspectorSection,
+				14);
+			addLabel(
+				u"Фото — ссылка https://… на картинку или file_id. Товары с "
+				"одинаковой категорией покажутся в одном разделе каталога."_q,
+				st::botStudioInspectorLabel,
+				0);
+			for (auto i = 0; i != products.size(); ++i) {
+				const auto product = products[i].toObject();
+				const auto set = [=](const QString &key, QJsonValue value) {
+					auto list = draft->value(u"products"_q).toArray();
+					if (i < list.size()) {
+						auto object = list[i].toObject();
+						if ((value.isString() && value.toString().isEmpty())) {
+							object.remove(key);
+						} else {
+							object.insert(key, value);
+						}
+						list[i] = object;
+						draft->insert(u"products"_q, list);
+					}
+				};
+				const auto price = product.value(u"price"_q).toDouble();
+				fieldsLine({
+					{ u"Товар %1: название"_q.arg(i + 1), product.value(u"title"_q).toString(), [=](QString v) { set(u"title"_q, v.trimmed()); }, 3 },
+					{ u"Цена"_q, price > 0 ? QString::number(price) : QString(), [=](QString v) { set(u"price"_q, number(v)); }, 1 },
+				}, [=] {
+					auto list = draft->value(u"products"_q).toArray();
+					if (i < list.size()) {
+						list.removeAt(i);
+					}
+					draft->insert(u"products"_q, list);
+					crl::on_main(box, [=] { (*rebuild)(); });
+				});
+				fieldsLine({
+					{ u"Категория"_q, product.value(u"category"_q).toString(), [=](QString v) { set(u"category"_q, v.trimmed()); }, 1 },
+					{ u"Фото: https://…"_q, product.value(u"photo"_q).toString(), [=](QString v) { set(u"photo"_q, v.trimmed()); }, 2 },
+				});
+				fieldsLine({
+					{ u"Описание"_q, product.value(u"description"_q).toString(), [=](QString v) { set(u"description"_q, v); }, 1 },
+				});
+				holder->add(
+					object_ptr<Ui::RpWidget>(holder),
+					QMargins(0, 0, 0, 10))->resize(1, 1);
+			}
+			const auto addProduct = holder->add(
+				object_ptr<Ui::LinkButton>(holder, u"＋ Добавить товар"_q),
+				QMargins(0, 4, 0, 4));
+			addProduct->setClickedCallback([=] {
+				auto list = draft->value(u"products"_q).toArray();
+				auto used = QStringList();
+				for (const auto &value : list) {
+					used.push_back(FlowProductKey(value.toObject()));
+				}
+				auto n = list.size() + 1;
+				while (used.contains(u"p%1"_q.arg(n))) {
+					++n;
+				}
+				list.push_back(QJsonObject{
+					{ u"id"_q, u"p%1"_q.arg(n) },
+					{ u"title"_q, u"Новый товар"_q },
+					{ u"price"_q, 100 },
+				});
+				draft->insert(u"products"_q, list);
+				crl::on_main(box, [=] { (*rebuild)(); });
+			});
+			holder->resizeToWidth(innerWidth);
+		};
+		(*rebuild)();
+		box->addButton(rpl::single(u"Готово"_q), [=] {
+			auto products = draft->value(u"products"_q).toArray();
+			for (auto i = products.size(); i != 0;) {
+				if (products[--i].toObject().value(u"title"_q).toString().isEmpty()) {
+					products.removeAt(i);
+				}
+			}
+			draft->insert(u"products"_q, products);
+			// Keep block edits made meanwhile, take only shop data.
+			state->flow.insert(u"products"_q, products);
+			state->flow.insert(u"shop"_q, draft->value(u"shop"_q));
+			markChanged(true);
+			box->closeBox();
+		});
+		box->addButton(rpl::single(u"Отмена"_q), [=] { box->closeBox(); });
+		(void)content;
+	}));
+}
+
 void FlowEditor::paintEvent(QPaintEvent *e) {
 	auto p = QPainter(this);
 	p.fillRect(e->rect(), st::windowBg);
@@ -2146,7 +3030,9 @@ void FlowEditor::updateGeometry() {
 	_add->moveToLeft(left, 0);
 	left += _add->width() + st::botStudioButtonSkip;
 	_settings->moveToLeft(left, 0);
-	left += _settings->width() + st::botStudioButtonSkip * 2;
+	left += _settings->width() + st::botStudioButtonSkip;
+	_products->moveToLeft(left, 0);
+	left += _products->width() + st::botStudioButtonSkip * 2;
 	_save->moveToLeft(width - _save->width(), 0);
 	const auto statusWidth = std::max(
 		width - left - _save->width() - st::botStudioButtonSkip * 2,

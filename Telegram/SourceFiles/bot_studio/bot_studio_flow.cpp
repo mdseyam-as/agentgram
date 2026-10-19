@@ -138,17 +138,80 @@ QStringList ValidateFlow(const QJsonObject &flow) {
 			for (const auto &value : block.value(u"actions"_q).toArray()) {
 				const auto action = value.toObject();
 				const auto kind = action.value(u"kind"_q).toString();
-				if ((kind == u"set"_q || kind == u"increment"_q)
+				if ((kind == u"set"_q
+						|| kind == u"increment"_q
+						|| kind == u"calc"_q)
 					&& action.value(u"variable"_q).toString().isEmpty()) {
 					result.push_back(where + u": не указана переменная"_q);
 				} else if (kind == u"send"_q
 					&& action.value(u"chat"_q).toString().isEmpty()) {
 					result.push_back(where + u": не указан чат"_q);
-				} else if (kind == u"webhook"_q
+				} else if ((kind == u"webhook"_q || kind == u"request"_q)
 					&& !action.value(u"url"_q).toString().startsWith(u"http"_q)) {
-					result.push_back(where + u": не указан адрес вебхука"_q);
+					result.push_back(where + u": не указан адрес https://…"_q);
+				} else if ((kind == u"tag"_q || kind == u"untag"_q)
+					&& action.value(u"value"_q).toString().trimmed().isEmpty()) {
+					result.push_back(where + u": не указана метка"_q);
+				} else if (kind == u"remind"_q) {
+					if (action.value(u"goto"_q).toString().isEmpty()) {
+						result.push_back(where + u": не выбрано, что напомнить"_q);
+					}
+					check(action.value(u"goto"_q).toString(), where);
+				} else if (kind == u"add_to_cart"_q) {
+					auto found = false;
+					for (const auto &product : flow.value(u"products"_q).toArray()) {
+						found |= (FlowProductKey(product.toObject())
+							== action.value(u"product"_q).toString());
+					}
+					if (!found) {
+						result.push_back(where + u": не выбран товар"_q);
+					}
 				}
 			}
+		} else if (type == u"random"_q) {
+			const auto branches = block.value(u"branches"_q).toArray();
+			if (branches.isEmpty()) {
+				result.push_back(where + u": добавьте варианты"_q);
+			}
+			for (const auto &value : branches) {
+				const auto branch = value.toObject();
+				if (branch.value(u"goto"_q).toString().isEmpty()) {
+					result.push_back(where + u": варианту не выбран блок"_q);
+				}
+				check(branch.value(u"goto"_q).toString(), where);
+			}
+		} else if (type == u"catalog"_q) {
+			if (flow.value(u"products"_q).toArray().isEmpty()) {
+				result.push_back(where
+					+ u": в каталоге нет товаров — добавьте их в «🛍 Товары»"_q);
+			}
+			check(block.value(u"cart"_q).toString(), where);
+		} else if (type == u"cart"_q) {
+			if (block.value(u"checkout"_q).toString().isEmpty()) {
+				result.push_back(where
+					+ u": не выбрано, куда ведёт «Оформить заказ»"_q);
+			}
+			check(block.value(u"checkout"_q).toString(), where);
+			check(block.value(u"catalog"_q).toString(), where);
+		} else if (type == u"order"_q) {
+			const auto payment = block.value(u"payment"_q).toString();
+			const auto shop = flow.value(u"shop"_q).toObject();
+			const auto currency = shop.value(u"currency"_q).toString();
+			if (payment == u"stars"_q
+				&& currency != u"XTR"_q
+				&& shop.value(u"starsRate"_q).toDouble() <= 0.) {
+				result.push_back(where
+					+ u": для оплаты звёздами укажите курс ⭐ в «🛍 Товары»"_q);
+			} else if (payment == u"card"_q
+				&& shop.value(u"providerToken"_q).toString().trimmed().isEmpty()) {
+				result.push_back(where
+					+ u": для оплаты картой вставьте платёжный токен в «🛍 Товары»"_q);
+			} else if (payment == u"card"_q && currency == u"XTR"_q) {
+				result.push_back(where
+					+ u": картой нельзя платить в звёздах — смените валюту"_q);
+			}
+			check(block.value(u"paid"_q).toString(), where);
+			check(block.value(u"empty"_q).toString(), where);
 		}
 		for (const auto &button : block.value(u"buttons"_q).toArray()) {
 			const auto object = button.toObject();
@@ -232,8 +295,36 @@ void RemoveFlowBlock(QJsonObject &flow, const QString &id) {
 			input.remove(u"next"_q);
 			block.insert(u"input"_q, input);
 		}
-		if (block.value(u"else"_q).toString() == id) {
-			block.remove(u"else"_q);
+		for (const auto &key : {
+				u"else"_q,
+				u"cart"_q,
+				u"checkout"_q,
+				u"catalog"_q,
+				u"empty"_q,
+				u"paid"_q }) {
+			if (block.value(key).toString() == id) {
+				block.remove(key);
+			}
+		}
+		auto branches = block.value(u"branches"_q).toArray();
+		for (auto j = branches.size(); j != 0;) {
+			if (branches[--j].toObject().value(u"goto"_q).toString() == id) {
+				branches.removeAt(j);
+			}
+		}
+		if (block.contains(u"branches"_q)) {
+			block.insert(u"branches"_q, branches);
+		}
+		auto actions = block.value(u"actions"_q).toArray();
+		for (auto j = 0; j != actions.size(); ++j) {
+			auto action = actions[j].toObject();
+			if (action.value(u"goto"_q).toString() == id) {
+				action.remove(u"goto"_q);
+				actions[j] = action;
+			}
+		}
+		if (block.contains(u"actions"_q)) {
+			block.insert(u"actions"_q, actions);
 		}
 		auto conditions = block.value(u"conditions"_q).toArray();
 		for (auto j = 0; j != conditions.size(); ++j) {
@@ -265,6 +356,17 @@ void RemoveFlowBlock(QJsonObject &flow, const QString &id) {
 		}
 	}
 	flow.insert(u"commands"_q, commands);
+	auto keywords = flow.value(u"keywords"_q).toArray();
+	for (auto i = keywords.size(); i != 0;) {
+		if (keywords[--i].toObject().value(u"goto"_q).toString() == id) {
+			keywords.removeAt(i);
+		}
+	}
+	flow.insert(u"keywords"_q, keywords);
+	auto fallback = flow.value(u"fallback"_q).toObject();
+	if (fallback.value(u"goto"_q).toString() == id) {
+		flow.insert(u"fallback"_q, QJsonObject{ { u"mode"_q, u"start"_q } });
+	}
 }
 
 QString NewFlowBlockId(const QJsonObject &flow) {
@@ -284,6 +386,11 @@ QString FlowBlockTitle(const QJsonObject &flow, const QString &id) {
 	}
 	const auto text = block.value(u"text"_q).toString().simplified();
 	return text.isEmpty() ? id : text.left(24);
+}
+
+QString FlowProductKey(const QJsonObject &product) {
+	const auto id = product.value(u"id"_q).toVariant().toString();
+	return id.isEmpty() ? product.value(u"title"_q).toString() : id;
 }
 
 } // namespace BotStudio

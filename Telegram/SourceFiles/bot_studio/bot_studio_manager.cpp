@@ -305,7 +305,114 @@ AudienceStats Studio::audience(const QString &id) const {
 		}
 	}
 	result.leads = root.value(u"leads"_q).toArray().size();
+	auto tags = base::flat_map<QString, int>();
+	for (auto i = users.begin(); i != users.end(); ++i) {
+		for (const auto &tag : i.value().toObject().value(u"tags"_q).toArray()) {
+			++tags[tag.toString()];
+		}
+	}
+	for (const auto &[tag, count] : tags) {
+		result.tags.emplace_back(tag, count);
+	}
+	ranges::stable_sort(result.tags, ranges::greater(), [](const auto &pair) {
+		return pair.second;
+	});
+	const auto orders = root.value(u"orders"_q).toArray();
+	result.orders = orders.size();
+	for (const auto &value : orders) {
+		const auto order = value.toObject();
+		const auto status = order.value(u"status"_q).toString();
+		if (status != u"canceled"_q && status != u"awaiting_payment"_q) {
+			result.revenue += order.value(u"total"_q).toDouble();
+		}
+		result.currency = order.value(u"currency"_q).toString();
+	}
+	if (const auto bot = this->bot(id); bot && bot->visual()) {
+		const auto currency = QJsonDocument::fromJson(bot->flow.toUtf8())
+			.object().value(u"shop"_q).toObject().value(u"currency"_q).toString();
+		if (!currency.isEmpty()) {
+			result.currency = currency;
+		}
+	}
+	if (result.currency.isEmpty()) {
+		result.currency = u"RUB"_q;
+	}
 	return result;
+}
+
+QJsonArray Studio::orders(const QString &id) const {
+	return QJsonDocument::fromJson(
+		loadStorage(id)).object().value(u"orders"_q).toArray();
+}
+
+QString Studio::setOrderStatus(
+		const QString &id,
+		int orderId,
+		const QString &status) {
+	const auto i = _instances.find(id);
+	if (i == end(_instances)
+		|| !i->second->runtime
+		|| i->second->status != BotStatus::Running) {
+		return u"Бот не запущен. Запустите его, чтобы менять статусы заказов."_q;
+	}
+	i->second->runtime->hook(QJsonDocument(QJsonObject{
+		{ u"type"_q, u"order_status"_q },
+		{ u"order"_q, orderId },
+		{ u"status"_q, status },
+	}).toJson(QJsonDocument::Compact));
+	return QString();
+}
+
+QString FormatMoney(double value, const QString &currency) {
+	const auto rounded = std::round(value * 100.) / 100.;
+	auto text = QString::number(std::abs(rounded), 'f', 2);
+	if (text.endsWith(u".00"_q)) {
+		text.chop(3);
+	} else {
+		text.replace('.', ',');
+	}
+	const auto comma = text.indexOf(',');
+	for (auto i = (comma < 0 ? text.size() : comma) - 3; i > 0; i -= 3) {
+		text.insert(i, QChar(' '));
+	}
+	if (rounded < 0) {
+		text = QString::fromUtf8("−") + text;
+	}
+	static const auto signs = base::flat_map<QString, QString>{
+		{ u"RUB"_q, u"₽"_q },
+		{ u"USD"_q, u"$"_q },
+		{ u"EUR"_q, u"€"_q },
+		{ u"UAH"_q, u"₴"_q },
+		{ u"KZT"_q, u"₸"_q },
+		{ u"BYN"_q, u"Br"_q },
+		{ u"UZS"_q, u"сум"_q },
+		{ u"GBP"_q, u"£"_q },
+		{ u"XTR"_q, u"⭐"_q },
+	};
+	const auto i = signs.find(currency);
+	const auto sign = (i != end(signs)) ? i->second : currency;
+	return (currency == u"USD"_q || currency == u"GBP"_q)
+		? (sign + text)
+		: (text + ' ' + sign);
+}
+
+QString OrderStatusTitle(const QString &status) {
+	if (status == u"awaiting_payment"_q) {
+		return u"⏳ Ждёт оплаты"_q;
+	} else if (status == u"new"_q) {
+		return u"🆕 Новый"_q;
+	} else if (status == u"paid"_q) {
+		return u"💳 Оплачен"_q;
+	} else if (status == u"accepted"_q) {
+		return u"✅ Принят"_q;
+	} else if (status == u"delivering"_q) {
+		return u"🚚 В пути"_q;
+	} else if (status == u"done"_q) {
+		return u"✔️ Выполнен"_q;
+	} else if (status == u"canceled"_q) {
+		return u"✖️ Отменён"_q;
+	}
+	return status;
 }
 
 QJsonArray Studio::leads(const QString &id) const {
@@ -316,7 +423,8 @@ QJsonArray Studio::leads(const QString &id) const {
 QString Studio::broadcast(
 		const QString &id,
 		const QString &text,
-		const QString &photo) {
+		const QString &photo,
+		const QString &tag) {
 	const auto i = _instances.find(id);
 	if (i == end(_instances)
 		|| !i->second->runtime
@@ -326,6 +434,9 @@ QString Studio::broadcast(
 	auto request = QJsonObject{ { u"text"_q, text } };
 	if (!photo.trimmed().isEmpty()) {
 		request.insert(u"photo"_q, photo.trimmed());
+	}
+	if (!tag.isEmpty()) {
+		request.insert(u"tag"_q, tag);
 	}
 	i->second->runtime->broadcast(
 		QJsonDocument(request).toJson(QJsonDocument::Compact));

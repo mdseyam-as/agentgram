@@ -247,12 +247,21 @@ std::vector<ToolDefinition> AgentToolDefinitions() {
 			{ u"action"_q, Prop(u"string"_q, u"get or clear."_q) },
 		}, { u"bot"_q }));
 	add(u"bot_studio_audience"_q,
-		u"Bot audience: users count, active in 7 days, blocked, and the "
-		"collected leads (form answers) of a bot."_q,
+		u"Bot audience: users count, active in 7 days, blocked, user tags, "
+		"the collected leads (form answers) and shop orders with revenue."_q,
 		Schema({
 			{ u"bot"_q, BotProp() },
-			{ u"limit"_q, Prop(u"integer"_q, u"Max leads to return, newest first, default 20."_q) },
+			{ u"limit"_q, Prop(u"integer"_q, u"Max leads and orders to return, newest first, default 20."_q) },
 		}, { u"bot"_q }));
+	add(u"bot_studio_order_status"_q,
+		u"Change a shop order status in a running bot; the buyer gets a "
+		"message about it. Statuses: accepted, delivering, done, canceled. "
+		"Use only when the user asks."_q,
+		Schema({
+			{ u"bot"_q, BotProp() },
+			{ u"order"_q, Prop(u"integer"_q, u"Order number."_q) },
+			{ u"status"_q, Prop(u"string"_q, u"accepted, delivering, done or canceled."_q) },
+		}, { u"bot"_q, u"order"_q, u"status"_q }));
 	add(u"bot_studio_broadcast"_q,
 		u"Send a message to every user of a running bot (broadcast). Needs "
 		"the user's approval. Use only when the user asks."_q,
@@ -260,6 +269,7 @@ std::vector<ToolDefinition> AgentToolDefinitions() {
 			{ u"bot"_q, BotProp() },
 			{ u"text"_q, Prop(u"string"_q, u"Message text."_q) },
 			{ u"photo"_q, Prop(u"string"_q, u"Optional picture URL."_q) },
+			{ u"tag"_q, Prop(u"string"_q, u"Optional: only users with this tag."_q) },
 		}, { u"bot"_q, u"text"_q }));
 	add(u"bot_studio_delete"_q,
 		u"Remove a bot from Bot Studio with its storage (the Telegram bot "
@@ -323,7 +333,14 @@ ToolPresentation PresentAgentTool(
 			}
 			: ToolPresentation{ u"Смотрю данные "_q + botName() };
 	} else if (name == u"bot_studio_audience"_q) {
-		return { u"Смотрю аудиторию и заявки "_q + botName() };
+		return { u"Смотрю аудиторию, заявки и заказы "_q + botName() };
+	} else if (name == u"bot_studio_order_status"_q) {
+		return {
+			u"Заказ №%1 у "_q.arg(args.value(u"order"_q).toInt()) + botName()
+				+ u": "_q + OrderStatusTitle(args.value(u"status"_q).toString()),
+			u"Покупатель получит сообщение о новом статусе."_q,
+			true,
+		};
 	} else if (name == u"bot_studio_broadcast"_q) {
 		const auto stats = studio->audience(
 			studio->find(args.value(u"bot"_q).toVariant().toString())
@@ -549,12 +566,43 @@ void ExecuteAgentTool(
 		result.insert(u"blocked"_q, stats.blocked);
 		result.insert(u"leads_total"_q, stats.leads);
 		result.insert(u"leads_recent"_q, recent);
+		auto tags = QJsonObject();
+		for (const auto &[tag, count] : stats.tags) {
+			tags.insert(tag, count);
+		}
+		result.insert(u"tags"_q, tags);
+		const auto orders = studio->orders(id);
+		auto recentOrders = QJsonArray();
+		for (auto i = orders.size(); i != 0 && recentOrders.size() < limit;) {
+			auto order = orders[--i].toObject();
+			order.remove(u"notice"_q);
+			recentOrders.push_back(order);
+		}
+		result.insert(u"orders_total"_q, stats.orders);
+		result.insert(u"revenue"_q, FormatMoney(stats.revenue, stats.currency));
+		result.insert(u"orders_recent"_q, recentOrders);
 		done(Ok(result));
+	} else if (name == u"bot_studio_order_status"_q) {
+		const auto status = args.value(u"status"_q).toString();
+		if (!QStringList{ u"accepted"_q, u"delivering"_q, u"done"_q, u"canceled"_q, u"new"_q, u"paid"_q }.contains(status)) {
+			done(Fail(u"Unknown status: "_q + status));
+			return;
+		}
+		const auto error = studio->setOrderStatus(
+			id,
+			args.value(u"order"_q).toInt(),
+			status);
+		if (!error.isEmpty()) {
+			done(Fail(error));
+		} else {
+			done(Ok(QJsonObject{ { u"changed"_q, true } }));
+		}
 	} else if (name == u"bot_studio_broadcast"_q) {
 		const auto error = studio->broadcast(
 			id,
 			args.value(u"text"_q).toString(),
-			args.value(u"photo"_q).toString());
+			args.value(u"photo"_q).toString(),
+			args.value(u"tag"_q).toString().trimmed());
 		if (!error.isEmpty()) {
 			done(Fail(error));
 		} else {
@@ -589,6 +637,10 @@ no deploy) while the app is open. Workflow:
   errors and set the code again. Tell the user the bot link (t.me/username)
   and how to test it. Use bot_studio_logs to debug after the user tried it.
 - Bots can use ai.ask / ai.chat with the AI provider configured here.
+- Shops, food delivery, paid content: use the flow with `products`, `shop`
+  and the catalog / cart / order blocks (payments in Telegram Stars or by
+  card). Support chats: the operator block. Read bot_studio_docs for all
+  block types, actions and conditions.
 )"_q;
 }
 

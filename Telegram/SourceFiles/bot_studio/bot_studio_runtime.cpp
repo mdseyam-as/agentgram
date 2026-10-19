@@ -457,6 +457,10 @@ void Runtime::broadcast(const QByteArray &request) {
 	callGlobal("__agentgram_broadcast", request);
 }
 
+void Runtime::hook(const QByteArray &request) {
+	callGlobal("__agentgram_hook", request);
+}
+
 void Runtime::callTimer(int id) {
 	const auto i = _timers.find(id);
 	if (i == end(_timers)) {
