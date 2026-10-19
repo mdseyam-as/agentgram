@@ -1,10 +1,9 @@
 name: Agentgram Windows build
 
 on:
-  push:
-    branches: [ agentgram ]
-    tags: [ 'v*' ]
   workflow_dispatch:
+  push:
+    tags: [ 'v*' ]
 
 permissions:
   contents: write

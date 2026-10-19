@@ -42,17 +42,34 @@ jobs:
             echo "TDESKTOP_BUILD_API=-D TDESKTOP_API_TEST=ON" >> $GITHUB_ENV
           fi
 
+      - name: Restore ccache.
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: linux-ccache-${{ github.run_id }}
+          restore-keys: linux-ccache-
+
       - name: Agentgram build.
         run: |
+          mkdir -p ${{ runner.temp }}/ccache
           docker run --rm \
           -u $(id -u) \
           -v $PWD:/usr/src/tdesktop \
+          -v ${{ runner.temp }}/ccache:/var/cache/ccache \
+          -e CCACHE_SLOPPINESS=pch_defines,time_macros \
           ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
-          /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+          env -u CCACHE_DISABLE /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
           -D CMAKE_CONFIGURATION_TYPES=Release \
           $TDESKTOP_BUILD_API \
           -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
           -D DESKTOP_APP_DISABLE_CRASH_REPORTS=ON
+
+      - name: Save ccache.
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ccache
+          key: linux-ccache-${{ github.run_id }}
 
       - name: Package.
         run: |
