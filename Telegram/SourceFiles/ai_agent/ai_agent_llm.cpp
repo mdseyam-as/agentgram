@@ -701,14 +701,93 @@ void LlmRequest::failWith(const QString &error, int status) {
 	}
 }
 
+QStringList ParseModels(const QByteArray &body) {
+	struct Model {
+		QString id;
+		int64 created = 0;
+		int priority = 0;
+		int index = 0;
+	};
+	const auto document = QJsonDocument::fromJson(body);
+	auto list = QJsonArray();
+	if (document.isArray()) {
+		list = document.array();
+	} else {
+		const auto root = document.object();
+		list = root.value(u"data"_q).toArray();
+		if (list.isEmpty()) {
+			list = root.value(u"models"_q).toArray();
+		}
+	}
+	static const auto skip = QStringList{
+		u"embed"_q, u"tts"_q, u"whisper"_q, u"dall-e"_q, u"davinci"_q,
+		u"babbage"_q, u"moderation"_q, u"transcribe"_q, u"-image"_q,
+		u"image-"_q, u"imagen"_q, u"veo-"_q, u"sora"_q, u"-audio"_q,
+		u"audio-"_q, u"realtime"_q, u"aqa"_q, u"rerank"_q, u"guard"_q,
+	};
+	auto models = std::vector<Model>();
+	auto hasPriority = false;
+	auto hasCreated = false;
+	for (const auto &value : list) {
+		auto model = Model{ .index = int(models.size()) };
+		if (value.isString()) {
+			model.id = value.toString();
+		} else {
+			const auto object = value.toObject();
+			const auto visibility = object.value(u"visibility"_q).toString();
+			if (visibility == u"hide"_q || visibility == u"hidden"_q) {
+				continue;
+			}
+			for (const auto key : { "id", "slug", "model", "name" }) {
+				model.id = object.value(QString::fromLatin1(key)).toString();
+				if (!model.id.isEmpty()) {
+					break;
+				}
+			}
+			model.created = int64(object.value(u"created"_q).toDouble());
+			if (object.contains(u"priority"_q)) {
+				model.priority = object.value(u"priority"_q).toInt();
+				hasPriority = true;
+			}
+		}
+		if (model.id.startsWith(u"models/"_q)) {
+			model.id = model.id.mid(7);
+		}
+		const auto lower = model.id.toLower();
+		if (model.id.isEmpty()
+			|| ranges::any_of(skip, [&](const QString &part) {
+				return lower.contains(part);
+			})) {
+			continue;
+		}
+		hasCreated = hasCreated || (model.created > 0);
+		models.push_back(std::move(model));
+	}
+	if (hasPriority) {
+		ranges::stable_sort(models, std::less<>(), &Model::priority);
+	} else if (hasCreated) {
+		ranges::stable_sort(models, std::greater<>(), &Model::created);
+	}
+	auto result = QStringList();
+	for (const auto &model : models) {
+		if (!result.contains(model.id)) {
+			result.push_back(model.id);
+		}
+	}
+	return result;
+}
+
 void FetchModels(
 		not_null<QNetworkAccessManager*> network,
 		const RequestSettings &settings,
 		ModelsHandlers handlers) {
 	const auto path = (settings.format == ApiFormat::Anthropic)
-		? u"/v1/models?limit=100"_q
+		? u"/v1/models?limit=1000"_q
+		: (settings.format == ApiFormat::OpenAIResponses)
+		? u"/models?client_version=0.99.0"_q
 		: u"/models"_q;
 	auto request = PrepareRequest(settings, path);
+	request.setRawHeader("Accept", "application/json");
 	const auto reply = network->get(request);
 	QObject::connect(reply, &QNetworkReply::finished, reply, [=] {
 		reply->deleteLater();
@@ -723,27 +802,12 @@ void FetchModels(
 			}
 			return;
 		}
-		auto result = QStringList();
-		const auto root = QJsonDocument::fromJson(body).object();
-		auto list = root.value(u"data"_q).toArray();
-		if (list.isEmpty()) {
-			list = root.value(u"models"_q).toArray();
-		}
-		for (const auto &value : list) {
-			const auto object = value.toObject();
-			auto id = object.value(u"id"_q).toString();
-			if (id.isEmpty()) {
-				id = object.value(u"name"_q).toString();
+		const auto result = ParseModels(body);
+		if (result.isEmpty()) {
+			if (handlers.fail) {
+				handlers.fail(u"Сервер вернул пустой список моделей."_q);
 			}
-			if (id.startsWith(u"models/"_q)) {
-				id = id.mid(7);
-			}
-			if (!id.isEmpty()) {
-				result.push_back(id);
-			}
-		}
-		result.sort(Qt::CaseInsensitive);
-		if (handlers.done) {
+		} else if (handlers.done) {
 			handlers.done(result);
 		}
 	});

@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ai_agent/ai_agent_config.h"
 #include "ai_agent/ai_agent_llm.h"
+#include "base/flat_set.h"
 #include "base/weak_ptr.h"
 
 class QNetworkAccessManager;
@@ -95,6 +96,7 @@ public:
 	void fetchModels(
 		const QString &providerId,
 		Fn<void(QStringList models, QString error)> done);
+	void refreshModelsIfStale(const QString &providerId);
 
 private:
 	struct PendingTool {
@@ -145,6 +147,7 @@ private:
 	base::weak_ptr<Window::SessionController> _window;
 
 	std::unique_ptr<OAuthFlow> _oauth;
+	base::flat_set<QString> _modelsLoading;
 
 };
 

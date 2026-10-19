@@ -257,6 +257,15 @@ aiAgentModelChip: RoundButton(defaultLightButton) {
 		font: font(12px);
 	}
 }
+aiAgentModelChipActive: RoundButton(aiAgentModelChip) {
+	textFg: activeButtonFg;
+	textFgOver: activeButtonFgOver;
+	textBg: activeButtonBg;
+	textBgOver: activeButtonBgOver;
+	ripple: RippleAnimation(defaultRippleAnimation) {
+		color: activeButtonBgRipple;
+	}
+}
 aiAgentLoginButton: RoundButton(defaultActiveButton) {
 	height: 38px;
 	textTop: 10px;

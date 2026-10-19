@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "ui/rp_widget.h"
 #include "base/object_ptr.h"
+#include "base/unique_qptr.h"
 
 namespace Ui {
 class ScrollArea;
@@ -16,6 +17,7 @@ class IconButton;
 class FlatLabel;
 class AbstractButton;
 class PlainShadow;
+class PopupMenu;
 } // namespace Ui
 
 namespace Window {
@@ -57,6 +59,7 @@ private:
 	void updateControlsGeometry();
 	void updateSendButton();
 	void showSettings();
+	void showModelMenu();
 	void scrollToBottom();
 
 	const not_null<Window::SessionController*> _controller;
@@ -84,6 +87,8 @@ private:
 	Ui::AbstractButton *_send = nullptr;
 	Ui::FlatLabel *_hint = nullptr;
 	object_ptr<Ui::PlainShadow> _composerShadow;
+
+	base::unique_qptr<Ui::PopupMenu> _modelMenu;
 
 	Fn<void()> _closeCallback;
 	Fn<void()> _popoutCallback;

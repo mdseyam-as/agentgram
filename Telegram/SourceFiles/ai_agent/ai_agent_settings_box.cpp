@@ -274,77 +274,125 @@ void FillProvider(
 		object_ptr<Ui::InputField>(
 			container,
 			st::defaultInputField,
-			rpl::single(u"Название модели"_q),
+			rpl::single(u"Название модели или поиск"_q),
 			config.model(id)),
 		st::aiAgentSettingsFieldPadding);
+	const auto status = AddLabel(
+		container,
+		QString(),
+		st::aiAgentSettingsLabel);
 	const auto flow = container->add(
 		object_ptr<FlowLayout>(container),
 		st::aiAgentSettingsPadding);
+	const auto refresh = container->add(
+		object_ptr<Ui::LinkButton>(container, u"Обновить список моделей"_q),
+		st::aiAgentSettingsPadding,
+		style::al_left);
+
+	struct State {
+		QStringList models;
+		QString error;
+		bool loading = false;
+	};
+	const auto state = std::make_shared<State>();
+	state->models = config.modelChoices(id);
 	const auto setModel = [=](const QString &model) {
 		if (const auto field = fields->model.data()) {
 			field->setText(model);
 			field->setCursorPosition(model.size());
 		}
 	};
-	for (const auto &model : info.models) {
-		const auto chip = MakeChip(flow, model, st::aiAgentModelChip);
-		chip->setClickedCallback([=] { setModel(model); });
-		flow->addWidget(chip);
-	}
-	if (info.format != ApiFormat::OpenAIResponses) {
-		const auto more = MakeChip(
-			flow,
-			u"Все модели…"_q,
-			st::aiAgentModelChip);
-		flow->addWidget(more);
-		const auto menu = std::make_shared<base::unique_qptr<Ui::PopupMenu>>();
-		more->setClickedCallback([=] {
-			if (fields->apiKey) {
-				manager->updateConfig([&](Config &config) {
-					config.settings(id).apiKey
-						= fields->apiKey->getLastText().trimmed();
-					if (fields->baseUrl) {
-						config.settings(id).baseUrl
-							= fields->baseUrl->getLastText().trimmed();
-					}
-				});
+	const auto rebuildChips = [=] {
+		constexpr auto kMaxChips = 24;
+		flow->clearWidgets();
+		const auto filter = fields->model
+			? fields->model->getLastText().trimmed()
+			: QString();
+		auto matched = QStringList();
+		for (const auto &model : state->models) {
+			if (filter.isEmpty()
+				|| model.contains(filter, Qt::CaseInsensitive)) {
+				matched.push_back(model);
 			}
-			manager->fetchModels(id, crl::guard(more, [=](
-					QStringList models,
-					QString error) {
-				*menu = base::make_unique_q<Ui::PopupMenu>(
-					more,
-					st::defaultPopupMenu);
-				if (!error.isEmpty()) {
-					(*menu)->addAction(error.left(120), [] {});
-				} else {
-					const auto filter = fields->model
-						? fields->model->getLastText().trimmed()
-						: QString();
-					auto shown = 0;
-					for (const auto &model : models) {
-						if (!filter.isEmpty()
-							&& !model.contains(filter, Qt::CaseInsensitive)
-							&& shown + 1 < models.size()) {
-							continue;
-						}
-						(*menu)->addAction(model, [=] { setModel(model); });
-						if (++shown >= 40) {
-							break;
-						}
-					}
-					if (!shown) {
-						for (const auto &model : models.mid(0, 40)) {
-							(*menu)->addAction(model, [=] {
-								setModel(model);
-							});
-						}
-					}
-				}
-				(*menu)->popup(QCursor::pos());
-			}));
+		}
+		if (matched.isEmpty() || (matched.size() == 1 && matched.front() == filter)) {
+			matched = state->models;
+		}
+		for (const auto &model : matched.mid(0, kMaxChips)) {
+			const auto chip = MakeChip(
+				flow,
+				model,
+				(model == filter)
+					? st::aiAgentModelChipActive
+					: st::aiAgentModelChip);
+			chip->setClickedCallback([=] { setModel(model); });
+			chip->show();
+			flow->addWidget(chip);
+		}
+		flow->resizeToWidth(flow->width());
+		auto text = QString();
+		if (state->loading) {
+			text = u"Загружаю список моделей…"_q;
+		} else if (!state->error.isEmpty()) {
+			text = u"Список моделей не загружен: "_q + state->error.left(160);
+		} else if (matched.size() > kMaxChips) {
+			text = u"Доступно моделей: %1. Введите часть названия, "
+				"чтобы найти нужную."_q.arg(state->models.size());
+		} else {
+			text = u"Доступно моделей: %1. Нажмите, чтобы выбрать."_q.arg(
+				state->models.size());
+		}
+		status->setText(text);
+	};
+	const auto saveCredentials = [=] {
+		manager->updateConfig([&](Config &config) {
+			auto &s = config.settings(id);
+			if (fields->apiKey) {
+				s.apiKey = fields->apiKey->getLastText().trimmed();
+			}
+			if (fields->baseUrl) {
+				s.baseUrl = fields->baseUrl->getLastText().trimmed();
+			}
+		});
+	};
+	const auto load = [=](bool force) {
+		saveCredentials();
+		const auto &current = manager->config();
+		const auto settings = current.find(id);
+		const auto hasAccess = (info.oauth == OAuthKind::ChatGPT)
+			? (settings && settings->loggedIn())
+			: (info.keyOptional || (settings && !settings->apiKey.isEmpty()));
+		if (!hasAccess || (!force && !current.modelsStale(id))) {
+			return;
+		}
+		state->loading = true;
+		state->error = QString();
+		rebuildChips();
+		manager->fetchModels(id, crl::guard(flow, [=](
+				QStringList models,
+				QString error) {
+			state->loading = false;
+			state->error = error;
+			if (!models.isEmpty()) {
+				state->models = models;
+			}
+			rebuildChips();
+		}));
+	};
+	refresh->setClickedCallback([=] { load(true); });
+	fields->model->changes(
+	) | rpl::on_next([=] {
+		rebuildChips();
+	}, fields->model->lifetime());
+	if (const auto key = fields->apiKey.data()) {
+		QObject::connect(key, &QLineEdit::editingFinished, key, [=] {
+			if (!key->getLastText().trimmed().isEmpty()) {
+				load(true);
+			}
 		});
 	}
+	rebuildChips();
+	crl::on_main(flow, [=] { load(false); });
 }
 
 } // namespace

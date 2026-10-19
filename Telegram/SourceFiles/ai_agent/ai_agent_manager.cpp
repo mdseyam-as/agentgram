@@ -552,6 +552,7 @@ void Manager::startOAuth(
 		});
 		crl::on_main(this, [=] {
 			_oauth = nullptr;
+			refreshModelsIfStale(providerId);
 		});
 		finished(QString());
 	}), crl::guard(this, [=](QString error) {
@@ -592,25 +593,73 @@ void Manager::fetchModels(
 		const QString &providerId,
 		Fn<void(QStringList models, QString error)> done) {
 	const auto &info = FindProvider(providerId);
-	if (info.format == ApiFormat::OpenAIResponses) {
-		done(info.models, QString());
+	const auto settings = _config.find(providerId);
+	const auto oauth = (info.oauth == OAuthKind::ChatGPT);
+	const auto fallback = [=](const QString &error) {
+		done(_config.modelChoices(providerId), error);
+	};
+	if (oauth
+		&& settings
+		&& !settings->refreshToken.isEmpty()
+		&& ChatGPTTokenExpiring(*settings)) {
+		const auto refresh = settings->refreshToken;
+		RefreshChatGPTToken(network(), refresh, crl::guard(this, [=](
+				OAuthResult result) {
+			updateConfig([&](Config &config) {
+				auto &s = config.settings(providerId);
+				s.accessToken = result.accessToken;
+				s.refreshToken = result.refreshToken;
+				if (!result.accountId.isEmpty()) {
+					s.accountId = result.accountId;
+				}
+				s.expiresAt = result.expiresAt;
+			});
+			fetchModels(providerId, done);
+		}), crl::guard(this, fallback));
 		return;
 	}
-	auto settings = RequestSettings{
+	auto request = RequestSettings{
 		.providerId = providerId,
 		.format = info.format,
 		.baseUrl = _config.baseUrl(providerId),
 	};
-	if (const auto s = _config.find(providerId)) {
-		settings.apiKey = s->apiKey;
+	if (settings) {
+		request.apiKey = oauth ? settings->accessToken : settings->apiKey;
+		request.accountId = settings->accountId;
 	}
-	FetchModels(network(), settings, {
+	if (request.apiKey.isEmpty() && !info.keyOptional) {
+		fallback(oauth
+			? u"Сначала войдите через ChatGPT."_q
+			: u"Сначала укажите ключ API."_q);
+		return;
+	}
+	FetchModels(network(), request, {
 		.done = crl::guard(this, [=](QStringList list) {
+			updateConfig([&](Config &config) {
+				auto &s = config.settings(providerId);
+				s.models = list;
+				s.modelsUpdatedAt = QDateTime::currentSecsSinceEpoch();
+				if (s.model.isEmpty() && !list.isEmpty()
+					&& !info.models.isEmpty()
+					&& !list.contains(info.models.front())) {
+					s.model = list.front();
+				}
+			});
 			done(list, QString());
 		}),
-		.fail = crl::guard(this, [=](QString error) {
-			done({}, error);
-		}),
+		.fail = crl::guard(this, fallback),
+	});
+}
+
+void Manager::refreshModelsIfStale(const QString &providerId) {
+	if (_modelsLoading.contains(providerId)
+		|| !_config.ready(providerId)
+		|| !_config.modelsStale(providerId)) {
+		return;
+	}
+	_modelsLoading.emplace(providerId);
+	fetchModels(providerId, [=](QStringList, QString) {
+		_modelsLoading.remove(providerId);
 	});
 }
 

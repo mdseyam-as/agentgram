@@ -138,5 +138,6 @@ void FetchModels(
 	ModelsHandlers handlers);
 
 [[nodiscard]] QString ErrorFromBody(const QByteArray &body, int status);
+[[nodiscard]] QStringList ParseModels(const QByteArray &body);
 
 } // namespace AiAgent

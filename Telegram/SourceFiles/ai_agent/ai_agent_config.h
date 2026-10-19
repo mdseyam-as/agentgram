@@ -47,6 +47,9 @@ struct ProviderSettings {
 	QString accountEmail;
 	int64 expiresAt = 0;
 
+	QStringList models;
+	int64 modelsUpdatedAt = 0;
+
 	[[nodiscard]] bool loggedIn() const {
 		return !accessToken.isEmpty();
 	}
@@ -64,6 +67,8 @@ struct Config {
 	[[nodiscard]] QString baseUrl(const QString &id) const;
 	[[nodiscard]] QString model(const QString &id) const;
 	[[nodiscard]] bool ready(const QString &id) const;
+	[[nodiscard]] QStringList modelChoices(const QString &id) const;
+	[[nodiscard]] bool modelsStale(const QString &id) const;
 
 	[[nodiscard]] QByteArray serialize() const;
 	[[nodiscard]] static Config Deserialize(const QByteArray &data);

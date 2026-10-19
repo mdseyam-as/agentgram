@@ -5,6 +5,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ai_agent/ai_agent_config.h"
 
+#include <QtCore/QDateTime>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
@@ -213,6 +214,27 @@ bool Config::ready(const QString &id) const {
 	return settings && !settings->apiKey.isEmpty();
 }
 
+QStringList Config::modelChoices(const QString &id) const {
+	const auto settings = find(id);
+	auto result = (settings && !settings->models.isEmpty())
+		? settings->models
+		: FindProvider(id).models;
+	const auto current = model(id);
+	if (!current.isEmpty() && !result.contains(current)) {
+		result.push_front(current);
+	}
+	return result;
+}
+
+bool Config::modelsStale(const QString &id) const {
+	constexpr auto kModelsLifetime = 12 * 3600;
+	const auto settings = find(id);
+	return !settings
+		|| settings->models.isEmpty()
+		|| (QDateTime::currentSecsSinceEpoch() - settings->modelsUpdatedAt
+			> kModelsLifetime);
+}
+
 QByteArray Config::serialize() const {
 	auto list = QJsonObject();
 	for (const auto &[id, settings] : providers) {
@@ -231,6 +253,14 @@ QByteArray Config::serialize() const {
 		put("account_email", settings.accountEmail);
 		if (settings.expiresAt) {
 			object.insert(u"expires_at"_q, double(settings.expiresAt));
+		}
+		if (!settings.models.isEmpty()) {
+			object.insert(
+				u"models"_q,
+				QJsonArray::fromStringList(settings.models));
+			object.insert(
+				u"models_updated_at"_q,
+				double(settings.modelsUpdatedAt));
 		}
 		list.insert(id, object);
 	}
@@ -277,6 +307,14 @@ Config Config::Deserialize(const QByteArray &data) {
 		settings.accountEmail = get("account_email");
 		settings.expiresAt = int64(
 			object.value(u"expires_at"_q).toDouble());
+		for (const auto &model : object.value(u"models"_q).toArray()) {
+			const auto name = model.toString();
+			if (!name.isEmpty()) {
+				settings.models.push_back(name);
+			}
+		}
+		settings.modelsUpdatedAt = int64(
+			object.value(u"models_updated_at"_q).toDouble());
 	}
 	return result;
 }

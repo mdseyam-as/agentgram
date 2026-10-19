@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/scroll_area.h"
 #include "ui/widgets/shadow.h"
 #include "ui/widgets/rp_window.h"
+#include "ui/widgets/popup_menu.h"
 #include "ui/wrap/vertical_layout.h"
 #include "ui/ui_utility.h"
 #include "window/main_window.h"
@@ -542,6 +543,11 @@ Panel::Panel(
 	) | rpl::on_next([=] {
 		updateSendButton();
 	}, lifetime());
+	_manager->refreshModelsIfStale(_manager->config().provider);
+	_manager->configChanges(
+	) | rpl::on_next([=] {
+		_manager->refreshModelsIfStale(_manager->config().provider);
+	}, lifetime());
 	Window::Theme::IsNightModeValue(
 	) | rpl::on_next([=](bool night) {
 		_theme->setIconOverride(
@@ -570,7 +576,7 @@ void Panel::setupHeader() {
 	_title->setAttribute(Qt::WA_TransparentForMouseEvents);
 	_subtitle->setAttribute(Qt::WA_TransparentForMouseEvents);
 	const auto titleButton = Ui::CreateChild<Ui::AbstractButton>(header);
-	titleButton->setClickedCallback([=] { showSettings(); });
+	titleButton->setClickedCallback([=] { showModelMenu(); });
 	titleButton->setCursor(style::cur_pointer);
 
 	_close = Ui::CreateChild<Ui::IconButton>(header, st::aiAgentClose);
@@ -831,6 +837,40 @@ void Panel::sendPrompt(const QString &text) {
 	}
 	_manager->send(text, _controller);
 	scrollToBottom();
+}
+
+void Panel::showModelMenu() {
+	const auto &config = _manager->config();
+	const auto provider = config.provider;
+	const auto current = config.model(provider);
+	_modelMenu = base::make_unique_q<Ui::PopupMenu>(
+		this,
+		st::defaultPopupMenu);
+	const auto menu = _modelMenu.get();
+	constexpr auto kMaxMenuModels = 30;
+	auto models = config.modelChoices(provider);
+	if (models.size() > kMaxMenuModels) {
+		models = models.mid(0, kMaxMenuModels);
+		if (!models.contains(current)) {
+			models.push_front(current);
+		}
+	}
+	for (const auto &model : models) {
+		const auto text = (model == current)
+			? (QString(QChar(0x2713)) + u"  "_q + model)
+			: model;
+		menu->addAction(text, [=] {
+			_manager->updateConfig([&](Config &config) {
+				config.settings(provider).model = model;
+			});
+		});
+	}
+	menu->addSeparator();
+	menu->addAction(u"Обновить список моделей"_q, [=] {
+		_manager->fetchModels(provider, [](QStringList, QString) {});
+	});
+	menu->addAction(u"Настройки ИИ…"_q, [=] { showSettings(); });
+	menu->popup(QCursor::pos());
 }
 
 void Panel::showSettings() {
