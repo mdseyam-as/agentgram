@@ -49,7 +49,10 @@ private:
 	void rebuildInspector();
 	void updateStatus();
 	void updateGeometry();
-	void addBlock(QPoint position, bool select = true);
+	void addBlock(
+		QPoint position,
+		bool select = true,
+		QString type = QString());
 	void markChanged(bool rebuild);
 	void showSettings();
 

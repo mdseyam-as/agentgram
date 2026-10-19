@@ -9,32 +9,102 @@
       "start": "welcome",
       "buttonsStyle": "inline",
       "blocks": [
-        { "id": "welcome", "title": "Приветствие", "x": 40, "y": 40,
+        {
+          "id": "welcome",
+          "title": "Приветствие",
+          "x": 40,
+          "y": 40,
           "text": "Здравствуйте, {first_name}! 👋\nВыберите, что вас интересует:",
           "buttons": [
-            { "text": "💳 Цены", "goto": "prices" },
-            { "text": "📍 Адрес", "goto": "address" },
-            { "text": "📞 Связаться с нами", "goto": "contact" }
-          ] },
-        { "id": "prices", "title": "Цены", "x": 360, "y": 0,
+            {
+              "text": "💳 Цены",
+              "goto": "prices"
+            },
+            {
+              "text": "📍 Адрес",
+              "goto": "address"
+            },
+            {
+              "text": "📞 Связаться с нами",
+              "goto": "contact"
+            }
+          ]
+        },
+        {
+          "id": "prices",
+          "title": "Цены",
+          "x": 360,
+          "y": 0,
           "text": "Консультация — 1 000 ₽\nПакет из 5 занятий — 4 000 ₽",
-          "buttons": [ { "text": "⬅️ Назад", "goto": "welcome" } ] },
-        { "id": "address", "title": "Адрес", "x": 360, "y": 190,
+          "buttons": [
+            {
+              "text": "⬅️ Назад",
+              "goto": "welcome"
+            }
+          ]
+        },
+        {
+          "id": "address",
+          "title": "Адрес",
+          "x": 360,
+          "y": 190,
           "text": "Мы находимся: г. Москва, ул. Примерная, 1.\nРаботаем Пн–Пт 9:00–19:00.",
-          "buttons": [ { "text": "⬅️ Назад", "goto": "welcome" } ] },
-        { "id": "contact", "title": "Связаться", "x": 360, "y": 380,
+          "buttons": [
+            {
+              "text": "⬅️ Назад",
+              "goto": "welcome"
+            }
+          ]
+        },
+        {
+          "id": "contact",
+          "title": "Связаться",
+          "x": 360,
+          "y": 380,
           "text": "Напишите ваш вопрос одним сообщением — мы ответим в ближайшее время.",
-          "input": { "enabled": true, "variable": "вопрос", "kind": "text", "next": "thanks" } },
-        { "id": "thanks", "title": "Спасибо", "x": 680, "y": 380, "notifyOwner": true,
+          "input": {
+            "enabled": true,
+            "variable": "вопрос",
+            "kind": "text",
+            "next": "thanks"
+          }
+        },
+        {
+          "id": "thanks",
+          "title": "Спасибо",
+          "x": 680,
+          "y": 380,
+          "notifyOwner": true,
           "text": "Спасибо! Мы получили ваш вопрос и скоро ответим.",
-          "buttons": [ { "text": "⬅️ В меню", "goto": "welcome" } ] }
+          "buttons": [
+            {
+              "text": "⬅️ В меню",
+              "goto": "welcome"
+            }
+          ]
+        }
       ],
-      "commands": [ { "command": "start", "description": "Главное меню", "goto": "welcome" } ],
+      "commands": [
+        {
+          "command": "start",
+          "description": "Главное меню",
+          "goto": "welcome"
+        }
+      ],
       "keywords": [
-        { "words": "цена, стоимость, сколько", "goto": "prices" },
-        { "words": "адрес, где, как добраться", "goto": "address" }
+        {
+          "words": "цена, стоимость, сколько",
+          "goto": "prices"
+        },
+        {
+          "words": "адрес, где, как добраться",
+          "goto": "address"
+        }
       ],
-      "fallback": { "mode": "block", "goto": "welcome" }
+      "fallback": {
+        "mode": "block",
+        "goto": "welcome"
+      }
     }
   },
   {
@@ -47,25 +117,85 @@
       "start": "hello",
       "buttonsStyle": "inline",
       "blocks": [
-        { "id": "hello", "title": "Приветствие", "x": 40, "y": 40,
+        {
+          "id": "hello",
+          "title": "Приветствие",
+          "x": 40,
+          "y": 40,
           "text": "Здравствуйте! Оставьте заявку — это займёт меньше минуты.",
-          "buttons": [ { "text": "✍️ Оставить заявку", "goto": "name" } ] },
-        { "id": "name", "title": "Имя", "x": 360, "y": 40,
+          "buttons": [
+            {
+              "text": "✍️ Оставить заявку",
+              "goto": "name"
+            }
+          ]
+        },
+        {
+          "id": "name",
+          "title": "Имя",
+          "x": 360,
+          "y": 40,
           "text": "Как вас зовут?",
-          "input": { "enabled": true, "variable": "имя", "kind": "text", "next": "phone" } },
-        { "id": "phone", "title": "Телефон", "x": 680, "y": 40,
+          "input": {
+            "enabled": true,
+            "variable": "имя",
+            "kind": "text",
+            "next": "phone"
+          }
+        },
+        {
+          "id": "phone",
+          "title": "Телефон",
+          "x": 680,
+          "y": 40,
           "text": "Приятно познакомиться, {имя}! Оставьте номер телефона:",
-          "input": { "enabled": true, "variable": "телефон", "kind": "phone", "next": "task" } },
-        { "id": "task", "title": "Задача", "x": 680, "y": 230,
+          "input": {
+            "enabled": true,
+            "variable": "телефон",
+            "kind": "phone",
+            "next": "task"
+          }
+        },
+        {
+          "id": "task",
+          "title": "Задача",
+          "x": 680,
+          "y": 230,
           "text": "Коротко опишите, что вам нужно:",
-          "input": { "enabled": true, "variable": "задача", "kind": "text", "next": "done" } },
-        { "id": "done", "title": "Заявка принята", "x": 360, "y": 230, "notifyOwner": true,
+          "input": {
+            "enabled": true,
+            "variable": "задача",
+            "kind": "text",
+            "next": "done"
+          }
+        },
+        {
+          "id": "done",
+          "title": "Заявка принята",
+          "x": 360,
+          "y": 230,
+          "notifyOwner": true,
           "text": "Спасибо, {имя}! Заявка принята, мы позвоним на {телефон}.",
-          "buttons": [ { "text": "🔁 Новая заявка", "goto": "name" } ] }
+          "buttons": [
+            {
+              "text": "🔁 Новая заявка",
+              "goto": "name"
+            }
+          ]
+        }
       ],
-      "commands": [ { "command": "start", "description": "Оставить заявку", "goto": "hello" } ],
+      "commands": [
+        {
+          "command": "start",
+          "description": "Оставить заявку",
+          "goto": "hello"
+        }
+      ],
       "keywords": [],
-      "fallback": { "mode": "block", "goto": "hello" }
+      "fallback": {
+        "mode": "block",
+        "goto": "hello"
+      }
     }
   },
   {
@@ -78,32 +208,109 @@
       "start": "start",
       "buttonsStyle": "inline",
       "blocks": [
-        { "id": "start", "title": "Выбор услуги", "x": 40, "y": 40,
+        {
+          "id": "start",
+          "title": "Выбор услуги",
+          "x": 40,
+          "y": 40,
           "text": "Привет, {first_name}! На какую услугу вас записать?",
           "buttons": [
-            { "text": "✂️ Стрижка", "goto": "haircut" },
-            { "text": "🧔 Борода", "goto": "beard" },
-            { "text": "💈 Комплекс", "goto": "complex" }
-          ] },
-        { "id": "haircut", "title": "Стрижка", "x": 360, "y": 0, "next": "day",
-          "text": "Стрижка — 1 500 ₽, около 45 минут." },
-        { "id": "beard", "title": "Борода", "x": 360, "y": 170, "next": "day",
-          "text": "Оформление бороды — 900 ₽, около 30 минут." },
-        { "id": "complex", "title": "Комплекс", "x": 360, "y": 340, "next": "day",
-          "text": "Стрижка + борода — 2 200 ₽, около 75 минут." },
-        { "id": "day", "title": "Выбор дня", "x": 680, "y": 170,
+            {
+              "text": "✂️ Стрижка",
+              "goto": "haircut"
+            },
+            {
+              "text": "🧔 Борода",
+              "goto": "beard"
+            },
+            {
+              "text": "💈 Комплекс",
+              "goto": "complex"
+            }
+          ]
+        },
+        {
+          "id": "haircut",
+          "title": "Стрижка",
+          "x": 360,
+          "y": 0,
+          "next": "day",
+          "text": "Стрижка — 1 500 ₽, около 45 минут."
+        },
+        {
+          "id": "beard",
+          "title": "Борода",
+          "x": 360,
+          "y": 170,
+          "next": "day",
+          "text": "Оформление бороды — 900 ₽, около 30 минут."
+        },
+        {
+          "id": "complex",
+          "title": "Комплекс",
+          "x": 360,
+          "y": 340,
+          "next": "day",
+          "text": "Стрижка + борода — 2 200 ₽, около 75 минут."
+        },
+        {
+          "id": "day",
+          "title": "Выбор дня",
+          "x": 680,
+          "y": 170,
           "text": "Когда вам удобно? Напишите день и время, например: «завтра в 18:00».",
-          "input": { "enabled": true, "variable": "время", "kind": "text", "next": "phone" } },
-        { "id": "phone", "title": "Телефон", "x": 1000, "y": 170,
+          "input": {
+            "enabled": true,
+            "variable": "время",
+            "kind": "text",
+            "next": "phone"
+          }
+        },
+        {
+          "id": "phone",
+          "title": "Телефон",
+          "x": 1000,
+          "y": 170,
           "text": "Оставьте номер телефона для подтверждения:",
-          "input": { "enabled": true, "variable": "телефон", "kind": "phone", "next": "booked" } },
-        { "id": "booked", "title": "Записали", "x": 1000, "y": 360, "notifyOwner": true,
+          "input": {
+            "enabled": true,
+            "variable": "телефон",
+            "kind": "phone",
+            "next": "booked"
+          }
+        },
+        {
+          "id": "booked",
+          "title": "Записали",
+          "x": 1000,
+          "y": 360,
+          "notifyOwner": true,
           "text": "Готово! Ждём вас: {время}. Если планы изменятся — просто напишите сюда.",
-          "buttons": [ { "text": "📅 Записаться ещё", "goto": "start" } ] }
+          "buttons": [
+            {
+              "text": "📅 Записаться ещё",
+              "goto": "start"
+            }
+          ]
+        }
       ],
-      "commands": [ { "command": "start", "description": "Записаться", "goto": "start" } ],
-      "keywords": [ { "words": "запис, время, свобод", "goto": "start" } ],
-      "fallback": { "mode": "block", "goto": "start" }
+      "commands": [
+        {
+          "command": "start",
+          "description": "Записаться",
+          "goto": "start"
+        }
+      ],
+      "keywords": [
+        {
+          "words": "запис, время, свобод",
+          "goto": "start"
+        }
+      ],
+      "fallback": {
+        "mode": "block",
+        "goto": "start"
+      }
     }
   },
   {
@@ -116,13 +323,188 @@
       "start": "hello",
       "buttonsStyle": "inline",
       "blocks": [
-        { "id": "hello", "title": "Приветствие", "x": 40, "y": 40,
-          "text": "Привет, {first_name}! Я ИИ-помощник. Задайте любой вопрос 🙂" }
+        {
+          "id": "hello",
+          "title": "Приветствие",
+          "x": 40,
+          "y": 40,
+          "text": "Привет, {first_name}! Я ИИ-помощник. Задайте любой вопрос 🙂"
+        }
       ],
-      "commands": [ { "command": "start", "description": "Начать", "goto": "hello" } ],
+      "commands": [
+        {
+          "command": "start",
+          "description": "Начать",
+          "goto": "hello"
+        }
+      ],
       "keywords": [],
-      "fallback": { "mode": "ai",
-        "prompt": "Ты дружелюбный помощник в Telegram. Отвечай кратко, по делу и на языке пользователя. Не используй Markdown." }
+      "fallback": {
+        "mode": "ai",
+        "prompt": "Ты дружелюбный помощник в Telegram. Отвечай кратко, по делу и на языке пользователя. Не используй Markdown."
+      }
+    }
+  },
+  {
+    "id": "quiz",
+    "emoji": "🎯",
+    "title": "Квиз с баллами",
+    "description": "Вопросы с вариантами ответа, подсчёт баллов и разный итог в зависимости от результата.",
+    "flow": {
+      "version": 1,
+      "start": "intro",
+      "buttonsStyle": "inline",
+      "blocks": [
+        {
+          "id": "intro",
+          "title": "Начало",
+          "x": 0,
+          "y": 160,
+          "text": "Привет, {first_name}! Ответьте на 2 вопроса и узнайте свой результат 🎯",
+          "buttons": [
+            {
+              "text": "🚀 Начать",
+              "goto": "reset"
+            }
+          ]
+        },
+        {
+          "id": "reset",
+          "type": "action",
+          "title": "Обнулить баллы",
+          "x": 320,
+          "y": 160,
+          "actions": [
+            {
+              "kind": "set",
+              "variable": "баллы",
+              "value": "0"
+            }
+          ],
+          "next": "q1"
+        },
+        {
+          "id": "q1",
+          "title": "Вопрос 1",
+          "x": 640,
+          "y": 160,
+          "text": "1/2. Какая планета ближе всего к Солнцу?",
+          "buttons": [
+            {
+              "text": "Меркурий",
+              "goto": "q1_ok"
+            },
+            {
+              "text": "Венера",
+              "goto": "q2"
+            },
+            {
+              "text": "Марс",
+              "goto": "q2"
+            }
+          ]
+        },
+        {
+          "id": "q1_ok",
+          "type": "action",
+          "title": "+1 балл",
+          "x": 960,
+          "y": 40,
+          "actions": [
+            {
+              "kind": "increment",
+              "variable": "баллы",
+              "value": "1"
+            }
+          ],
+          "next": "q2"
+        },
+        {
+          "id": "q2",
+          "title": "Вопрос 2",
+          "x": 960,
+          "y": 220,
+          "text": "2/2. Сколько секунд в одной минуте?",
+          "buttons": [
+            {
+              "text": "60",
+              "goto": "q2_ok"
+            },
+            {
+              "text": "100",
+              "goto": "result"
+            }
+          ]
+        },
+        {
+          "id": "q2_ok",
+          "type": "action",
+          "title": "+1 балл",
+          "x": 1280,
+          "y": 100,
+          "actions": [
+            {
+              "kind": "increment",
+              "variable": "баллы",
+              "value": "1"
+            }
+          ],
+          "next": "result"
+        },
+        {
+          "id": "result",
+          "type": "condition",
+          "title": "Проверка результата",
+          "x": 1280,
+          "y": 300,
+          "conditions": [
+            {
+              "variable": "баллы",
+              "op": "gt",
+              "value": "1",
+              "goto": "win"
+            }
+          ],
+          "else": "lose"
+        },
+        {
+          "id": "win",
+          "title": "Отлично",
+          "x": 1600,
+          "y": 220,
+          "text": "🏆 Отлично! Вы набрали {баллы} из 2.",
+          "buttons": [
+            {
+              "text": "🔁 Ещё раз",
+              "goto": "reset"
+            }
+          ]
+        },
+        {
+          "id": "lose",
+          "title": "Можно лучше",
+          "x": 1600,
+          "y": 420,
+          "text": "Вы набрали {баллы} из 2. Попробуйте ещё раз!",
+          "buttons": [
+            {
+              "text": "🔁 Ещё раз",
+              "goto": "reset"
+            }
+          ]
+        }
+      ],
+      "commands": [
+        {
+          "command": "start",
+          "description": "Начать квиз",
+          "goto": "intro"
+        }
+      ],
+      "keywords": [],
+      "fallback": {
+        "mode": "start"
+      }
     }
   },
   {
@@ -135,12 +517,25 @@
       "start": "start",
       "buttonsStyle": "inline",
       "blocks": [
-        { "id": "start", "title": "Старт", "x": 40, "y": 40,
-          "text": "Привет, {first_name}!" }
+        {
+          "id": "start",
+          "title": "Старт",
+          "x": 40,
+          "y": 40,
+          "text": "Привет, {first_name}!"
+        }
       ],
-      "commands": [ { "command": "start", "description": "Начать", "goto": "start" } ],
+      "commands": [
+        {
+          "command": "start",
+          "description": "Начать",
+          "goto": "start"
+        }
+      ],
       "keywords": [],
-      "fallback": { "mode": "start" }
+      "fallback": {
+        "mode": "start"
+      }
     }
   }
 ]

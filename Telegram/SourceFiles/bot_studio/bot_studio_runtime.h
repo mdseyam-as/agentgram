@@ -64,6 +64,8 @@ public:
 	// Returns an error text or an empty string.
 	[[nodiscard]] QString load(const QString &code);
 	void dispatch(const QByteArray &update);
+	// {text, photo?, buttons?, html?} to every private chat of the bot.
+	void broadcast(const QByteArray &request);
 
 	// Compiles without running, returns an error text or an empty string.
 	[[nodiscard]] static QString Check(const QString &code);

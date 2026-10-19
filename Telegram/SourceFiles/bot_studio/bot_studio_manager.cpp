@@ -277,6 +277,48 @@ QByteArray Studio::storage(const QString &id) const {
 	return loadStorage(id);
 }
 
+AudienceStats Studio::audience(const QString &id) const {
+	auto result = AudienceStats();
+	const auto root = QJsonDocument::fromJson(loadStorage(id)).object();
+	const auto users = root.value(u"__users"_q).toObject();
+	const auto weekAgo = base::unixtime::now() - 7 * 24 * 3600;
+	for (auto i = users.begin(); i != users.end(); ++i) {
+		const auto user = i.value().toObject();
+		++result.users;
+		if (user.value(u"blocked"_q).toBool()) {
+			++result.blocked;
+		} else if (user.value(u"last_seen"_q).toDouble() >= weekAgo) {
+			++result.active;
+		}
+	}
+	result.leads = root.value(u"leads"_q).toArray().size();
+	return result;
+}
+
+QJsonArray Studio::leads(const QString &id) const {
+	return QJsonDocument::fromJson(
+		loadStorage(id)).object().value(u"leads"_q).toArray();
+}
+
+QString Studio::broadcast(
+		const QString &id,
+		const QString &text,
+		const QString &photo) {
+	const auto i = _instances.find(id);
+	if (i == end(_instances)
+		|| !i->second->runtime
+		|| i->second->status != BotStatus::Running) {
+		return u"Бот не запущен. Запустите его и повторите рассылку."_q;
+	}
+	auto request = QJsonObject{ { u"text"_q, text } };
+	if (!photo.trimmed().isEmpty()) {
+		request.insert(u"photo"_q, photo.trimmed());
+	}
+	i->second->runtime->broadcast(
+		QJsonDocument(request).toJson(QJsonDocument::Compact));
+	return QString();
+}
+
 void Studio::clearStorage(const QString &id) {
 	_storage[id] = QByteArray("{}");
 	_storageDirty.emplace(id);

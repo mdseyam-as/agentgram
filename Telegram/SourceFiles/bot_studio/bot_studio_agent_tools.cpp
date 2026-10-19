@@ -246,6 +246,21 @@ std::vector<ToolDefinition> AgentToolDefinitions() {
 			{ u"bot"_q, BotProp() },
 			{ u"action"_q, Prop(u"string"_q, u"get or clear."_q) },
 		}, { u"bot"_q }));
+	add(u"bot_studio_audience"_q,
+		u"Bot audience: users count, active in 7 days, blocked, and the "
+		"collected leads (form answers) of a bot."_q,
+		Schema({
+			{ u"bot"_q, BotProp() },
+			{ u"limit"_q, Prop(u"integer"_q, u"Max leads to return, newest first, default 20."_q) },
+		}, { u"bot"_q }));
+	add(u"bot_studio_broadcast"_q,
+		u"Send a message to every user of a running bot (broadcast). Needs "
+		"the user's approval. Use only when the user asks."_q,
+		Schema({
+			{ u"bot"_q, BotProp() },
+			{ u"text"_q, Prop(u"string"_q, u"Message text."_q) },
+			{ u"photo"_q, Prop(u"string"_q, u"Optional picture URL."_q) },
+		}, { u"bot"_q, u"text"_q }));
 	add(u"bot_studio_delete"_q,
 		u"Remove a bot from Bot Studio with its storage (the Telegram bot "
 		"itself stays in @BotFather)."_q,
@@ -307,6 +322,20 @@ ToolPresentation PresentAgentTool(
 				true,
 			}
 			: ToolPresentation{ u"Смотрю данные "_q + botName() };
+	} else if (name == u"bot_studio_audience"_q) {
+		return { u"Смотрю аудиторию и заявки "_q + botName() };
+	} else if (name == u"bot_studio_broadcast"_q) {
+		const auto stats = studio->audience(
+			studio->find(args.value(u"bot"_q).toVariant().toString())
+				? studio->find(args.value(u"bot"_q).toVariant().toString())->id
+				: QString());
+		return {
+			u"Рассылка от "_q + botName()
+				+ u" — %1 получателей"_q.arg(
+					std::max(stats.users - stats.blocked, 0)),
+			args.value(u"text"_q).toString(),
+			true,
+		};
 	} else if (name == u"bot_studio_delete"_q) {
 		return {
 			u"Удалить "_q + botName() + u" из Bot Studio"_q,
@@ -505,6 +534,34 @@ void ExecuteAgentTool(
 				text = text.left(kMaxStorageText) + u"…(truncated)"_q;
 			}
 			done({ text });
+		}
+	} else if (name == u"bot_studio_audience"_q) {
+		const auto stats = studio->audience(id);
+		const auto limit = std::clamp(args.value(u"limit"_q).toInt(20), 1, 200);
+		const auto leads = studio->leads(id);
+		auto recent = QJsonArray();
+		for (auto i = leads.size(); i != 0 && recent.size() < limit;) {
+			recent.push_back(leads[--i]);
+		}
+		auto result = Describe(studio, *bot);
+		result.insert(u"users"_q, stats.users);
+		result.insert(u"active_7_days"_q, stats.active);
+		result.insert(u"blocked"_q, stats.blocked);
+		result.insert(u"leads_total"_q, stats.leads);
+		result.insert(u"leads_recent"_q, recent);
+		done(Ok(result));
+	} else if (name == u"bot_studio_broadcast"_q) {
+		const auto error = studio->broadcast(
+			id,
+			args.value(u"text"_q).toString(),
+			args.value(u"photo"_q).toString());
+		if (!error.isEmpty()) {
+			done(Fail(error));
+		} else {
+			done(Ok(QJsonObject{
+				{ u"started"_q, true },
+				{ u"note"_q, u"Progress and the result appear in bot_studio_logs."_q },
+			}));
 		}
 	} else if (name == u"bot_studio_delete"_q) {
 		studio->remove(id);

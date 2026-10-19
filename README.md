@@ -50,7 +50,16 @@ deploy. Enabled bots start together with the app.
     arrive to you in Telegram;
   * commands (`/start`, `/help`…), keywords and what to do with any other
     message: show a block, reply with text or **answer with AI**.
-* **Templates**: menu & FAQ, lead form, booking, AI assistant, blank.
+* **Block types**: *message* (text, photo/video/file/audio, buttons, a question
+  with answer check), *condition* (branch by answers: equals, contains, greater /
+  less, filled), *AI answer* (the text is written by AI from your prompt with
+  variables), *actions* (set a value, add points, notify you, post to a chat or
+  channel, send data to a webhook — Make, Zapier, Google Sheets — save a lead).
+  Any block can wait N seconds with "typing…" before it.
+* **Audience**: users, active in 7 days, blocked; a table of collected leads
+  with CSV export (opens in Excel); **broadcasts** to every user of the bot.
+* **Templates**: menu & FAQ, lead form, booking, AI assistant, quiz with points,
+  blank.
 * **Build with AI**: describe the bot in plain words — the agent registers it in
   @BotFather (with your confirmation), builds the scheme, starts it and checks
   the log. Then describe any change in the "✦ Make" field.

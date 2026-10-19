@@ -13,6 +13,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <deque>
 
+#include <QtCore/QJsonArray>
+
 class QNetworkAccessManager;
 
 namespace Main {
@@ -63,6 +65,13 @@ struct Template {
 
 [[nodiscard]] const std::vector<Template> &Templates();
 
+struct AudienceStats {
+	int users = 0;
+	int active = 0;
+	int blocked = 0;
+	int leads = 0;
+};
+
 // All bots of one Telegram account. Bots with enabled == true run while
 // the account is open in the app.
 class Studio final : public base::has_weak_ptr {
@@ -90,6 +99,13 @@ public:
 	void clearLogs(const QString &id);
 	[[nodiscard]] QByteArray storage(const QString &id) const;
 	void clearStorage(const QString &id);
+	[[nodiscard]] AudienceStats audience(const QString &id) const;
+	[[nodiscard]] QJsonArray leads(const QString &id) const;
+	// Sends a message to every private chat of a running bot.
+	QString broadcast(
+		const QString &id,
+		const QString &text,
+		const QString &photo = QString());
 
 	[[nodiscard]] rpl::producer<> botsChanged() const;
 	[[nodiscard]] rpl::producer<QString> botUpdated() const;

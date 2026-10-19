@@ -24,6 +24,9 @@ function fill(text, ctx) {
     username: from.username ? '@' + from.username : '',
     user_id: from.id,
     bot: '@' + (bot.username || ''),
+    last_message: typeof ctx.text === 'string' ? ctx.text : '',
+    date: new Date().toLocaleDateString('ru-RU'),
+    time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
   }, vars(ctx));
   return String(text || '').replace(/\{([^{}\s]+)\}/g, (match, key) =>
     (values[key] !== undefined && values[key] !== null) ? String(values[key]) : match);
@@ -76,6 +79,105 @@ function summary(ctx, block) {
   return lines.join('\n');
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function saveLead(ctx, block) {
+  const from = ctx.from || {};
+  const leads = db.get('leads', []);
+  leads.push({
+    date: new Date().toISOString(),
+    step: block.title || block.id,
+    user_id: from.id,
+    username: from.username ? '@' + from.username : '',
+    name: [from.first_name, from.last_name].filter(Boolean).join(' '),
+    answers: Object.assign({}, vars(ctx)),
+  });
+  db.set('leads', leads.slice(-5000));
+}
+
+function compare(condition, ctx) {
+  const raw = vars(ctx)[condition.variable];
+  const value = raw === undefined || raw === null ? '' : String(raw);
+  const expected = fill(condition.value, ctx);
+  const number = (v) => Number(String(v).replace(',', '.').replace(/\s/g, ''));
+  switch (condition.op || 'eq') {
+  case 'eq': return value.trim().toLowerCase() === expected.trim().toLowerCase();
+  case 'neq': return value.trim().toLowerCase() !== expected.trim().toLowerCase();
+  case 'contains': return value.toLowerCase().includes(expected.toLowerCase());
+  case 'gt': return number(value) > number(expected);
+  case 'lt': return number(value) < number(expected);
+  case 'filled': return value.trim() !== '';
+  case 'empty': return value.trim() === '';
+  }
+  return false;
+}
+
+async function runAction(ctx, action, block) {
+  const values = vars(ctx);
+  switch (action.kind) {
+  case 'set':
+    if (action.variable) values[action.variable] = fill(action.value, ctx);
+    return;
+  case 'increment': {
+    if (!action.variable) return;
+    const by = Number(fill(action.value === undefined ? '1' : action.value, ctx)) || 0;
+    values[action.variable] = (Number(values[action.variable]) || 0) + by;
+    return;
+  }
+  case 'clear':
+    ctx.session.vars = {};
+    return;
+  case 'notify':
+    await bot.sendToOwner(action.text ? fill(action.text, ctx) : summary(ctx, block)).catch((e) =>
+      console.warn('Не удалось написать владельцу (откройте бота и нажмите /start):', e.message));
+    return;
+  case 'send':
+    if (!action.chat) return;
+    await bot.send(String(action.chat).trim(), fill(action.text, ctx) || summary(ctx, block)).catch((e) =>
+      console.warn('Не удалось отправить в ' + action.chat + ' (бот должен быть участником/админом):', e.message));
+    return;
+  case 'webhook': {
+    if (!action.url) return;
+    const from = ctx.from || {};
+    const payload = {
+      bot: bot.username,
+      step: block.title || block.id,
+      user_id: from.id,
+      username: from.username || '',
+      name: [from.first_name, from.last_name].filter(Boolean).join(' '),
+      date: new Date().toISOString(),
+      answers: Object.assign({}, values),
+    };
+    const result = await http.post(fill(action.url, ctx), payload).catch((e) => ({ ok: false, status: 0, text: e.message }));
+    if (!result.ok) console.warn('Вебхук ответил ' + result.status + ': ' + String(result.text).slice(0, 200));
+    return;
+  }
+  case 'save_lead':
+    saveLead(ctx, block);
+    return;
+  }
+}
+
+async function sendMessage(ctx, block, extra) {
+  const text = fill(block.text, ctx).trim();
+  const media = block.media && block.media.url
+    ? block.media
+    : (block.photo ? { kind: 'photo', url: block.photo } : null);
+  if (media) {
+    const url = fill(media.url, ctx).trim();
+    const options = Object.assign({ caption: text || undefined }, extra);
+    if (media.kind === 'video') return ctx.replyVideo(url, options);
+    if (media.kind === 'document') return ctx.replyDocument(url, options);
+    if (media.kind === 'audio') return ctx.replyAudio(url, options);
+    return ctx.replyPhoto(url, options);
+  }
+  if (block.location && block.location.latitude !== undefined) {
+    if (text) await ctx.reply(text, extra);
+    return ctx.replyLocation(Number(block.location.latitude), Number(block.location.longitude));
+  }
+  return ctx.reply(text || '…', extra);
+}
+
 async function show(ctx, id, depth) {
   const block = BLOCKS.get(id);
   if (!block) {
@@ -83,14 +185,59 @@ async function show(ctx, id, depth) {
     return;
   }
   depth = depth || 0;
-  const text = fill(block.text, ctx).trim();
-  const extra = markup(block, ctx);
-  if (block.photo) {
-    await ctx.replyPhoto(block.photo, Object.assign({ caption: text || undefined }, extra));
-  } else {
-    await ctx.reply(text || '…', extra);
+  if (depth > 25) {
+    console.warn('Слишком длинная цепочка блоков без ответа пользователя, остановлено на', block.title || id);
+    return;
   }
+  const type = block.type || 'message';
+  if (block.delay > 0) {
+    await ctx.typing().catch(() => {});
+    await sleep(Math.min(Number(block.delay) || 0, 30) * 1000);
+  }
+  if (type === 'condition') {
+    for (const condition of block.conditions || []) {
+      if (condition.goto && compare(condition, ctx)) {
+        return show(ctx, condition.goto, depth + 1);
+      }
+    }
+    if (block.else) return show(ctx, block.else, depth + 1);
+    return;
+  }
+  if (type === 'action') {
+    for (const action of block.actions || []) {
+      await runAction(ctx, action, block);
+    }
+    if (block.next) return show(ctx, block.next, depth + 1);
+    return;
+  }
+  if (type === 'ai') {
+    await ctx.typing().catch(() => {});
+    let answer = '';
+    try {
+      answer = await ai.ask({
+        system: fill(block.system, ctx) || 'Ты помощник в Telegram-боте. Отвечай кратко, по делу, без Markdown.',
+        prompt: fill(block.prompt || '{last_message}', ctx),
+      });
+    } catch (e) {
+      console.error('Ответ ИИ не получен:', e.message);
+      answer = block.fallbackText ? fill(block.fallbackText, ctx) : '';
+    }
+    if (block.variable) vars(ctx)[block.variable] = answer;
+    if (answer && block.send !== false) {
+      await ctx.reply(answer.slice(0, 4000), markup(block, ctx));
+    }
+    const buttons = (block.buttons || []).filter((b) => b && b.text);
+    if (!buttons.length && block.next) {
+      await sleep(400);
+      return show(ctx, block.next, depth + 1);
+    }
+    ctx.session.wait = null;
+    return;
+  }
+
+  await sendMessage(ctx, block, markup(block, ctx));
   if (block.notifyOwner) {
+    saveLead(ctx, block);
     await bot.sendToOwner(summary(ctx, block)).catch((e) =>
       console.warn('Не удалось отправить заявку владельцу (откройте бота и нажмите /start):', e.message));
   }
@@ -99,8 +246,8 @@ async function show(ctx, id, depth) {
     ctx.session.wait = id;
   } else {
     ctx.session.wait = null;
-    if (block.next && depth < 10) {
-      await new Promise((resolve) => setTimeout(resolve, 600));
+    if (block.next) {
+      await sleep(600);
       await show(ctx, block.next, depth + 1);
     }
   }

@@ -114,9 +114,41 @@ QStringList ValidateFlow(const QJsonObject &flow) {
 		const auto block = value.toObject();
 		const auto title = block.value(u"title"_q).toString();
 		const auto where = u"Блок «%1»"_q.arg(title);
-		if (block.value(u"text"_q).toString().trimmed().isEmpty()
-			&& block.value(u"photo"_q).toString().trimmed().isEmpty()) {
-			result.push_back(where + u": пустое сообщение"_q);
+		const auto type = block.value(u"type"_q).toString();
+		if (type.isEmpty() || type == u"message"_q) {
+			if (block.value(u"text"_q).toString().trimmed().isEmpty()
+				&& block.value(u"photo"_q).toString().trimmed().isEmpty()
+				&& block.value(u"media"_q).toObject().value(
+					u"url"_q).toString().trimmed().isEmpty()) {
+				result.push_back(where + u": пустое сообщение"_q);
+			}
+		} else if (type == u"condition"_q) {
+			for (const auto &value : block.value(u"conditions"_q).toArray()) {
+				const auto condition = value.toObject();
+				if (condition.value(u"goto"_q).toString().isEmpty()) {
+					result.push_back(where + u": проверке не выбрана ветка"_q);
+				}
+				if (condition.value(u"variable"_q).toString().isEmpty()) {
+					result.push_back(where + u": в проверке не указан ответ"_q);
+				}
+				check(condition.value(u"goto"_q).toString(), where);
+			}
+			check(block.value(u"else"_q).toString(), where);
+		} else if (type == u"action"_q) {
+			for (const auto &value : block.value(u"actions"_q).toArray()) {
+				const auto action = value.toObject();
+				const auto kind = action.value(u"kind"_q).toString();
+				if ((kind == u"set"_q || kind == u"increment"_q)
+					&& action.value(u"variable"_q).toString().isEmpty()) {
+					result.push_back(where + u": не указана переменная"_q);
+				} else if (kind == u"send"_q
+					&& action.value(u"chat"_q).toString().isEmpty()) {
+					result.push_back(where + u": не указан чат"_q);
+				} else if (kind == u"webhook"_q
+					&& !action.value(u"url"_q).toString().startsWith(u"http"_q)) {
+					result.push_back(where + u": не указан адрес вебхука"_q);
+				}
+			}
 		}
 		for (const auto &button : block.value(u"buttons"_q).toArray()) {
 			const auto object = button.toObject();
@@ -199,6 +231,20 @@ void RemoveFlowBlock(QJsonObject &flow, const QString &id) {
 		if (input.value(u"next"_q).toString() == id) {
 			input.remove(u"next"_q);
 			block.insert(u"input"_q, input);
+		}
+		if (block.value(u"else"_q).toString() == id) {
+			block.remove(u"else"_q);
+		}
+		auto conditions = block.value(u"conditions"_q).toArray();
+		for (auto j = 0; j != conditions.size(); ++j) {
+			auto condition = conditions[j].toObject();
+			if (condition.value(u"goto"_q).toString() == id) {
+				condition.remove(u"goto"_q);
+				conditions[j] = condition;
+			}
+		}
+		if (!conditions.isEmpty()) {
+			block.insert(u"conditions"_q, conditions);
 		}
 		blocks[i] = block;
 	}

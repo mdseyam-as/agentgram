@@ -50,7 +50,34 @@ Set it with `bot_studio_set_flow` / `bot_studio_create {flow}`. JSON:
   (`goto`), `text` (`text`), `ai` (answer with AI, `prompt` = its role).
 - `buttonsStyle`: `inline` (buttons under the message) or `keyboard`
   (buttons replace the keyboard).
+- Block `type` (default `message`):
+  - `message` — as above; instead of `photo` you may use
+    `media: {kind: photo|video|document|audio, url}`; `delay` (seconds, ≤30)
+    waits with "typing…" before the block (works for every type).
+  - `condition` — invisible branching: `conditions: [{variable, op, value,
+    goto}]` checked in order, `else: blockId`. `op`: eq, neq, contains, gt, lt
+    (numbers), filled, empty. Example: quiz score `{баллы} gt 3`.
+  - `ai` — the bot answers with text written by AI: `prompt` (with
+    {variables}, `{last_message}` = the user's last message), optional `system`
+    (role), `variable` (save the answer), `send` (default true), `buttons`,
+    `next`.
+  - `action` — `actions: [...]`, then `next`. Kinds: `{kind:"set", variable,
+    value}`, `{kind:"increment", variable, value}` (score/counter),
+    `{kind:"clear"}` (forget answers), `{kind:"notify", text}` (message to the
+    owner; empty text = all answers), `{kind:"send", chat:"@channel", text}`
+    (bot must be a member/admin), `{kind:"webhook", url}` (POST JSON with the
+    user and answers — Make/Zapier/Google Apps Script), `{kind:"save_lead"}`
+    (adds the answers to the Leads table in the Audience tab).
+- `notifyOwner` on a message also saves the answers as a lead.
+- Variables also: `{last_message}`, `{date}`, `{time}`.
 - Ids: short latin words. Keep texts friendly; emoji are welcome.
+
+## Audience
+
+Every private chat that writes to a bot is counted (Audience tab:
+users, active in 7 days, blocked, leads with CSV export, broadcast).
+`bot_studio_audience` reads it, `bot_studio_broadcast` sends a message to all
+users (only on the user's request).
 
 # JavaScript bots
 

@@ -44,7 +44,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QRegularExpression>
 #include <QtGui/QSyntaxHighlighter>
 #include <QtGui/QTextCharFormat>
+#include <QtWidgets/QFileDialog>
+#include <QtWidgets/QHeaderView>
 #include <QtWidgets/QPlainTextEdit>
+#include <QtWidgets/QTableWidget>
 
 namespace BotStudio {
 namespace {
@@ -860,6 +863,7 @@ private:
 		Flow,
 		Code,
 		Logs,
+		Audience,
 		Data,
 	};
 
@@ -867,6 +871,10 @@ private:
 	void setupCode();
 	void setupLogs();
 	void setupData();
+	void setupAudience();
+	void refreshAudience();
+	void exportLeads();
+	void showBroadcast();
 	void setupAiBar();
 	void updateHeader();
 	void updateGeometry();
@@ -900,6 +908,7 @@ private:
 	not_null<Ui::RpWidget*> _codeTab;
 	not_null<Ui::RpWidget*> _logsTab;
 	not_null<Ui::RpWidget*> _dataTab;
+	not_null<Ui::RpWidget*> _audienceTab;
 
 	Ui::RoundButton *_templates = nullptr;
 	Ui::RoundButton *_docs = nullptr;
@@ -916,6 +925,14 @@ private:
 	Ui::FlatLabel *_logsHint = nullptr;
 	QPlainTextEdit *_logView = nullptr;
 	size_t _logsShown = 0;
+
+	Ui::RpWidget *_stats = nullptr;
+	Ui::RoundButton *_broadcast = nullptr;
+	Ui::RoundButton *_exportCsv = nullptr;
+	Ui::RoundButton *_refreshAudience = nullptr;
+	Ui::FlatLabel *_leadsTitle = nullptr;
+	QTableWidget *_leadsTable = nullptr;
+	AudienceStats _audienceStats;
 
 	Ui::RoundButton *_refreshData = nullptr;
 	Ui::RoundButton *_clearData = nullptr;
@@ -949,25 +966,28 @@ BotPage::BotPage(
 , _tabs(Ui::CreateChild<PillTabs>(this))
 , _codeTab(Ui::CreateChild<Ui::RpWidget>(this))
 , _logsTab(Ui::CreateChild<Ui::RpWidget>(this))
-, _dataTab(Ui::CreateChild<Ui::RpWidget>(this)) {
+, _dataTab(Ui::CreateChild<Ui::RpWidget>(this))
+, _audienceTab(Ui::CreateChild<Ui::RpWidget>(this)) {
 	if (_visual) {
 		_flowEditor = Ui::CreateChild<FlowEditor>(
 			this,
 			_studio,
 			_layers,
 			_id);
-		_tabList = { Tab::Flow, Tab::Code, Tab::Logs, Tab::Data };
+		_tabList = { Tab::Flow, Tab::Code, Tab::Logs, Tab::Audience, Tab::Data };
 		_tabs->setSections({
 			u"🧩 Конструктор"_q,
 			u"</> Код"_q,
 			u"📜 Логи"_q,
+			u"👥 Аудитория"_q,
 			u"🗄 Данные"_q,
 		});
 	} else {
-		_tabList = { Tab::Code, Tab::Logs, Tab::Data };
+		_tabList = { Tab::Code, Tab::Logs, Tab::Audience, Tab::Data };
 		_tabs->setSections({
 			u"</> Код"_q,
 			u"📜 Логи"_q,
+			u"👥 Аудитория"_q,
 			u"🗄 Данные"_q,
 		});
 	}
@@ -975,6 +995,7 @@ BotPage::BotPage(
 	setupCode();
 	setupLogs();
 	setupData();
+	setupAudience();
 	setupAiBar();
 	_tabs->activated(
 	) | rpl::on_next([=](int index) {
@@ -1313,6 +1334,257 @@ void BotPage::askAi() {
 				text));
 }
 
+void BotPage::setupAudience() {
+	const auto tab = _audienceTab.get();
+	_broadcast = MakeButton(tab, u"📣 Рассылка"_q, st::botStudioActionButton);
+	_exportCsv = MakeButton(tab, u"⬇ Заявки в CSV"_q, st::botStudioLightButton);
+	_refreshAudience = MakeButton(tab, u"Обновить"_q, st::botStudioLightButton);
+	_broadcast->setClickedCallback([=] { showBroadcast(); });
+	_exportCsv->setClickedCallback([=] { exportLeads(); });
+	_refreshAudience->setClickedCallback([=] { refreshAudience(); });
+
+	_stats = Ui::CreateChild<Ui::RpWidget>(tab);
+	_stats->paintRequest(
+	) | rpl::on_next([=] {
+		auto p = QPainter(_stats);
+		auto hq = PainterHighQualityEnabler(p);
+		const auto items = std::vector<std::pair<QString, int>>{
+			{ u"👥 Пользователи"_q, _audienceStats.users },
+			{ u"🔥 Активны за 7 дней"_q, _audienceStats.active },
+			{ u"🗂 Заявки"_q, _audienceStats.leads },
+			{ u"🚫 Заблокировали"_q, _audienceStats.blocked },
+		};
+		const auto skip = 10;
+		const auto count = int(items.size());
+		const auto width = (_stats->width() - skip * (count - 1)) / count;
+		const auto height = _stats->height();
+		const auto numberFont = style::font(st::botStudioEmptyTitle.style.font);
+		const auto labelFont = style::font(st::botStudioRowStatusFont);
+		for (auto i = 0; i != count; ++i) {
+			const auto r = QRect(i * (width + skip), 0, width, height);
+			p.setPen(Qt::NoPen);
+			p.setBrush(st::botStudioEditorBg);
+			p.drawRoundedRect(r, st::botStudioCardRadius, st::botStudioCardRadius);
+			p.setFont(numberFont);
+			p.setPen(st::windowBoldFg);
+			p.drawText(
+				r.marginsRemoved({ 16, 12, 16, 0 }),
+				Qt::AlignLeft | Qt::AlignTop,
+				QString::number(items[i].second));
+			p.setFont(labelFont);
+			p.setPen(st::windowSubTextFg);
+			p.drawText(
+				r.marginsRemoved({ 16, 0, 16, 12 }),
+				Qt::AlignLeft | Qt::AlignBottom,
+				items[i].first);
+		}
+	}, _stats->lifetime());
+
+	_leadsTitle = Ui::CreateChild<Ui::FlatLabel>(
+		tab,
+		u"Заявки"_q,
+		st::botStudioInspectorSection);
+	_leadsTable = Ui::CreateChild<QTableWidget>(tab);
+	_leadsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	_leadsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+	_leadsTable->verticalHeader()->setVisible(false);
+	_leadsTable->horizontalHeader()->setStretchLastSection(true);
+	_leadsTable->setFrameShape(QFrame::NoFrame);
+	_leadsTable->setShowGrid(false);
+	_leadsTable->setWordWrap(false);
+	const auto updatePalette = [=] {
+		const auto bg = st::botStudioEditorBg->c.name();
+		const auto fg = st::windowFg->c.name();
+		const auto sub = st::windowSubTextFg->c.name();
+		const auto line = st::windowBg->c.name();
+		const auto active = st::windowBgActive->c.name();
+		_leadsTable->setStyleSheet(uR"(
+QTableWidget { background: %1; color: %2; border-radius: 10px; gridline-color: %4; }
+QTableWidget::item { padding: 6px 10px; border-bottom: 1px solid %4; }
+QTableWidget::item:selected { background: %5; color: white; }
+QHeaderView::section { background: %1; color: %3; border: none; border-bottom: 1px solid %4; padding: 8px 10px; font-weight: 600; }
+QTableCornerButton::section { background: %1; border: none; }
+QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
+QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
+QScrollBar::handle { background: %3; border-radius: 3px; min-height: 30px; min-width: 30px; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0px; height: 0px; }
+)"_q.arg(bg, fg, sub, line, active));
+	};
+	updatePalette();
+	style::PaletteChanged(
+	) | rpl::on_next(updatePalette, _leadsTitle->lifetime());
+}
+
+void BotPage::refreshAudience() {
+	_audienceStats = _studio->audience(_id);
+	_stats->update();
+	const auto leads = _studio->leads(_id);
+	auto keys = QStringList();
+	for (const auto &value : leads) {
+		const auto answers = value.toObject().value(u"answers"_q).toObject();
+		for (const auto &key : answers.keys()) {
+			if (!keys.contains(key)) {
+				keys.push_back(key);
+			}
+		}
+	}
+	auto headers = QStringList{
+		u"Дата"_q,
+		u"Имя"_q,
+		u"Username"_q,
+		u"Шаг"_q,
+	};
+	headers += keys;
+	_leadsTable->clear();
+	_leadsTable->setColumnCount(headers.size());
+	_leadsTable->setHorizontalHeaderLabels(headers);
+	_leadsTable->setRowCount(leads.size());
+	for (auto i = 0; i != leads.size(); ++i) {
+		// Newest first.
+		const auto lead = leads[leads.size() - 1 - i].toObject();
+		const auto date = QDateTime::fromString(
+			lead.value(u"date"_q).toString(),
+			Qt::ISODateWithMs).toLocalTime();
+		auto values = QStringList{
+			date.isValid()
+				? date.toString(u"dd.MM.yyyy HH:mm"_q)
+				: lead.value(u"date"_q).toString(),
+			lead.value(u"name"_q).toString(),
+			lead.value(u"username"_q).toString(),
+			lead.value(u"step"_q).toString(),
+		};
+		const auto answers = lead.value(u"answers"_q).toObject();
+		for (const auto &key : keys) {
+			values.push_back(answers.value(key).toVariant().toString());
+		}
+		for (auto j = 0; j != values.size(); ++j) {
+			_leadsTable->setItem(i, j, new QTableWidgetItem(values[j]));
+		}
+	}
+	_leadsTable->resizeColumnsToContents();
+	_leadsTitle->setText(leads.isEmpty()
+		? u"Заявок пока нет. Включите «Присылать мне ответы клиента» в "
+			"сообщении или добавьте действие «Сохранить заявку»."_q
+		: u"Заявки (%1)"_q.arg(leads.size()));
+	updateGeometry();
+}
+
+void BotPage::exportLeads() {
+	const auto leads = _studio->leads(_id);
+	if (leads.isEmpty()) {
+		_layers->showBox(Ui::MakeInformBox(u"Заявок пока нет."_q));
+		return;
+	}
+	const auto bot = _studio->bot(_id);
+	const auto path = QFileDialog::getSaveFileName(
+		window(),
+		u"Сохранить заявки"_q,
+		u"leads_%1_%2.csv"_q.arg(
+			bot ? bot->username : u"bot"_q,
+			QDate::currentDate().toString(u"yyyy-MM-dd"_q)),
+		u"CSV (*.csv)"_q);
+	if (path.isEmpty()) {
+		return;
+	}
+	auto keys = QStringList();
+	for (const auto &value : leads) {
+		for (const auto &key : value.toObject().value(u"answers"_q).toObject().keys()) {
+			if (!keys.contains(key)) {
+				keys.push_back(key);
+			}
+		}
+	}
+	const auto escape = [](QString value) {
+		value.replace('"', u"\"\""_q);
+		return '"' + value + '"';
+	};
+	auto lines = QStringList();
+	auto header = QStringList{ u"Дата"_q, u"Имя"_q, u"Username"_q, u"ID"_q, u"Шаг"_q };
+	header += keys;
+	auto headerCells = QStringList();
+	for (const auto &cell : header) {
+		headerCells.push_back(escape(cell));
+	}
+	lines.push_back(headerCells.join(';'));
+	for (const auto &value : leads) {
+		const auto lead = value.toObject();
+		const auto answers = lead.value(u"answers"_q).toObject();
+		auto row = QStringList{
+			lead.value(u"date"_q).toString(),
+			lead.value(u"name"_q).toString(),
+			lead.value(u"username"_q).toString(),
+			lead.value(u"user_id"_q).toVariant().toString(),
+			lead.value(u"step"_q).toString(),
+		};
+		for (const auto &key : keys) {
+			row.push_back(answers.value(key).toVariant().toString());
+		}
+		auto escaped = QStringList();
+		for (const auto &cell : row) {
+			escaped.push_back(escape(cell));
+		}
+		lines.push_back(escaped.join(';'));
+	}
+	auto file = QFile(path);
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+		_layers->showBox(Ui::MakeInformBox(u"Не удалось сохранить файл."_q));
+		return;
+	}
+	// BOM: Excel opens UTF-8 CSV correctly only with it.
+	file.write("\xEF\xBB\xBF");
+	file.write(lines.join(u"\r\n"_q).toUtf8());
+	file.close();
+	_layers->showBox(Ui::MakeInformBox(
+		u"Сохранено заявок: %1\n%2"_q.arg(leads.size()).arg(path)));
+}
+
+void BotPage::showBroadcast() {
+	const auto stats = _studio->audience(_id);
+	_layers->showBox(Box([=](not_null<Ui::GenericBox*> box) {
+		box->setTitle(rpl::single(u"Рассылка"_q));
+		box->setWidth(st::boxWideWidth);
+		box->addRow(object_ptr<Ui::FlatLabel>(
+			box,
+			u"Сообщение получат все, кто писал боту: %1 чел. (кроме "
+				"заблокировавших). Используйте рассылку бережно — "
+				"Telegram ограничивает спам."_q.arg(
+					std::max(stats.users - stats.blocked, 0)),
+			st::botStudioBoxLabel));
+		const auto text = box->addRow(object_ptr<Ui::InputField>(
+			box,
+			st::defaultInputField,
+			Ui::InputField::Mode::MultiLine,
+			rpl::single(u"Текст рассылки"_q)));
+		const auto photo = box->addRow(object_ptr<Ui::InputField>(
+			box,
+			st::defaultInputField,
+			rpl::single(u"Картинка: ссылка https://… (необязательно)"_q)));
+		const auto error = box->addRow(object_ptr<Ui::FlatLabel>(
+			box,
+			QString(),
+			st::botStudioError));
+		box->setFocusCallback([=] { text->setFocusFast(); });
+		box->addButton(rpl::single(u"Отправить"_q), [=] {
+			const auto value = text->getLastText().trimmed();
+			if (value.isEmpty()) {
+				text->showError();
+				return;
+			}
+			const auto result = _studio->broadcast(
+				_id,
+				value,
+				photo->getLastText());
+			if (result.isEmpty()) {
+				box->closeBox();
+				showTab(Tab::Logs);
+			} else {
+				error->setText(result);
+			}
+		});
+		box->addButton(rpl::single(u"Отмена"_q), [=] { box->closeBox(); });
+	}));
+}
+
 void BotPage::showMenu() {
 	_menu = base::make_unique_q<Ui::PopupMenu>(this, st::defaultPopupMenu);
 	_menu->addAction(u"Сменить токен…"_q, [=] {
@@ -1350,6 +1622,10 @@ void BotPage::updateHeader() {
 	_name->setText(bot->name.isEmpty() ? (u"@"_q + bot->username) : bot->name);
 	const auto status = _studio->status(_id);
 	auto text = u"@"_q + bot->username;
+	_audienceStats = _studio->audience(_id);
+	if (_audienceStats.users > 0) {
+		text += u" · 👥 %1"_q.arg(_audienceStats.users);
+	}
 	const auto error = _studio->statusError(_id);
 	if (status == BotStatus::Error && !error.isEmpty()) {
 		text += u" · "_q + error;
@@ -1383,11 +1659,14 @@ void BotPage::showTab(Tab tab) {
 	_codeTab->setVisible(tab == Tab::Code);
 	_logsTab->setVisible(tab == Tab::Logs);
 	_dataTab->setVisible(tab == Tab::Data);
+	_audienceTab->setVisible(tab == Tab::Audience);
 	_aiBar->setVisible(tab == Tab::Flow || tab == Tab::Code);
 	if (tab == Tab::Logs) {
 		appendLogs(false);
 	} else if (tab == Tab::Data) {
 		refreshData();
+	} else if (tab == Tab::Audience) {
+		refreshAudience();
 	} else if (tab == Tab::Code && _visual) {
 		if (const auto bot = _studio->bot(_id); bot && bot->code != _editor->toPlainText()) {
 			SetEditorText(_editor, bot->code);
@@ -1489,8 +1768,27 @@ void BotPage::updateGeometry() {
 	if (_flowEditor) {
 		_flowEditor->setGeometry(content);
 	}
-	for (const auto tab : { _codeTab.get(), _logsTab.get(), _dataTab.get() }) {
+	for (const auto tab : { _codeTab.get(), _logsTab.get(), _dataTab.get(), _audienceTab.get() }) {
 		tab->setGeometry(content);
+	}
+	// Audience tab.
+	{
+		auto left = 0;
+		for (const auto button : { _broadcast, _exportCsv, _refreshAudience }) {
+			button->moveToLeft(left, 0);
+			left += button->width() + st::botStudioButtonSkip;
+		}
+		const auto statsTop = _broadcast->height() + st::botStudioToolbarSkip;
+		_stats->setGeometry(0, statsTop, inner, 84);
+		const auto titleTop = statsTop + _stats->height() + 14;
+		_leadsTitle->resizeToWidth(inner);
+		_leadsTitle->moveToLeft(0, titleTop);
+		const auto tableTop = titleTop + _leadsTitle->height() + 8;
+		_leadsTable->setGeometry(
+			0,
+			tableTop,
+			inner,
+			std::max(contentHeight - tableTop, 40));
 	}
 
 	// Code tab.

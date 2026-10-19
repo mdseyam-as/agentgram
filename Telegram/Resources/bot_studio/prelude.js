@@ -494,6 +494,61 @@ function finalize(ctx) {
 	}
 }
 
+// ---- audience and broadcasts -----------------------------------------
+const USERS_KEY = '__users';
+function trackUser(ctx) {
+	const chat = ctx.chat;
+	const from = ctx.from;
+	if (!chat || chat.type !== 'private' || !from || from.is_bot) return;
+	const users = store[USERS_KEY] || (store[USERS_KEY] = {});
+	const id = String(chat.id);
+	const now = Math.floor(Date.now() / 1000);
+	const user = users[id] || { first_seen: now };
+	user.name = [from.first_name, from.last_name].filter(Boolean).join(' ');
+	user.username = from.username || '';
+	user.last_seen = now;
+	user.messages = (user.messages || 0) + 1;
+	delete user.blocked;
+	users[id] = user;
+	scheduleSave();
+}
+
+global.__agentgram_broadcast = (json) => {
+	let request;
+	try {
+		request = JSON.parse(json);
+	} catch (e) {
+		return;
+	}
+	const users = store[USERS_KEY] || {};
+	const ids = Object.keys(users).filter((id) => !users[id].blocked);
+	const options = request.buttons ? { buttons: request.buttons } : {};
+	if (request.html) options.html = true;
+	log(0, ['📣 Рассылка начата: получателей ' + ids.length]);
+	(async () => {
+		let sent = 0;
+		let failed = 0;
+		for (const id of ids) {
+			try {
+				if (request.photo) {
+					await send('sendPhoto', id, { photo: request.photo, caption: request.text }, options);
+				} else {
+					await send('sendMessage', id, { text: String(request.text) }, options);
+				}
+				++sent;
+			} catch (e) {
+				++failed;
+				if (/blocked|deactivated|not found|chat not found/i.test(e.message)) {
+					users[id].blocked = true;
+					scheduleSave();
+				}
+			}
+			await new Promise((resolve) => setTimeout(resolve, 45));
+		}
+		log(0, ['📣 Рассылка завершена: доставлено ' + sent + ', не доставлено ' + failed]);
+	})();
+};
+
 global.__agentgram_dispatch = (json) => {
 	let update;
 	try {
@@ -503,6 +558,7 @@ global.__agentgram_dispatch = (json) => {
 		return;
 	}
 	const ctx = new Context(update);
+	trackUser(ctx);
 	let index = 0;
 	const next = () => {
 		while (index < handlers.length) {
