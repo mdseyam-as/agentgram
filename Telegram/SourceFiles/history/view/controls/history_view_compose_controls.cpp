@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/controls/history_view_compose_controls.h"
 
+#include "ui/agent_surface.h"
+#include "agent_ui/agent_ui_glass.h"
+
 #include "history/view/controls/history_view_bot_menu_button.h"
 
 #include "base/call_delayed.h"
@@ -395,7 +398,12 @@ void FieldHeader::init() {
 	) | rpl::on_next([=] {
 		Painter p(this);
 		p.setInactive(_show->paused(Window::GifPauseReason::Any));
-		p.fillRect(rect(), st::historyComposeAreaBg);
+		Ui::AgentSurface::Fill(
+			p,
+			this,
+			rect(),
+			st::historyComposeAreaBg,
+			Ui::AgentSurface::Kind::Composer);
 
 		const auto position = st::historyReplyIconPosition;
 		if (_suggestOptions) {
@@ -2892,6 +2900,12 @@ void ComposeControls::init() {
 		auto p = QPainter(_wrap.get());
 		paintBackground(p, _wrap->rect(), clip);
 	}, _wrap->lifetime());
+	if (&_st == &st::defaultComposeControls) {
+		// AgentUI: the regular chat composer is glass, its field is
+		// transparent over it.
+		AgentUi::RegisterGlassRoot(_wrap.get(), AgentUi::Surface::Composer);
+		_field->setAttribute(Qt::WA_OpaquePaintEvent, false);
+	}
 
 
 	_header->editMsgIdValue(
@@ -5727,6 +5741,14 @@ void ComposeControls::paintBackground(QPainter &p, QRect full, QRect clip) {
 				- _st.starsSkip);
 		}
 		p.drawRoundedRect(full, _st.radius, _st.radius);
+	} else if (&_st == &st::defaultComposeControls) {
+		Ui::AgentSurface::Fill(
+			p,
+			_wrap.get(),
+			clip,
+			_st.bg,
+			Ui::AgentSurface::Kind::Composer,
+			RectPart::Top);
 	} else {
 		p.fillRect(clip, _st.bg);
 	}

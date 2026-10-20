@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "window/window_filters_menu.h"
 
+#include "agent_ui/agent_ui.h"
+#include "agent_ui/agent_ui_glass.h"
+
 #include "menu/menu_mark_as_read.h"
 #include "mainwindow.h"
 #include "window/window_session_controller.h"
@@ -135,10 +138,20 @@ void FiltersMenu::setup() {
 	_outer.paintRequest(
 	) | rpl::on_next([=](QRect clip) {
 		auto p = QPainter(&_outer);
+		if (AgentUi::Active()) {
+			AgentUi::PaintGlass(
+				p,
+				&_outer,
+				clip,
+				AgentUi::Surface::Folders,
+				RectPart::Right);
+			return;
+		}
 		p.setPen(Qt::NoPen);
 		p.setBrush(st::windowFiltersButton.textBg);
 		p.drawRect(clip);
 	}, _outer.lifetime());
+	AgentUi::RegisterGlassRoot(&_outer, AgentUi::Surface::Folders);
 
 	_parent->heightValue(
 	) | rpl::on_next([=](int height) {

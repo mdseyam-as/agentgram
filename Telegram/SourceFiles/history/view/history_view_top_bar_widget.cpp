@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_top_bar_widget.h"
 
+#include "agent_ui/agent_ui_glass.h"
+
 #include "ai_agent/ai_agent_panel.h"
 #include "history/history.h"
 #include "history/view/history_view_send_action.h"
@@ -133,6 +135,7 @@ TopBarWidget::TopBarWidget(
 , _menuToggle(this, st::topBarMenuToggle)
 , _titlePeerText(st::windowMinWidth / 3)
 , _onlineUpdater([=] { updateOnlineDisplay(); }) {
+	AgentUi::RegisterGlassRoot(this, AgentUi::Surface::Header);
 	setAttribute(Qt::WA_OpaquePaintEvent);
 
 	_clear->setTextTransform(Ui::RoundButtonTextTransform::ToUpper);
@@ -546,7 +549,13 @@ void TopBarWidget::paintEvent(QPaintEvent *e) {
 		: -st::topBarHeight;
 	const auto slidingTop = std::max(selectedButtonsTop, searchFieldTop);
 
-	p.fillRect(QRect(0, 0, width(), st::topBarHeight), st::topBarBg);
+	Ui::AgentSurface::Fill(
+		p,
+		this,
+		QRect(0, 0, width(), st::topBarHeight),
+		st::topBarBg,
+		Ui::AgentSurface::Kind::Header,
+		RectPart::Bottom);
 	if (slidingTop < 0) {
 		p.translate(0, slidingTop + st::topBarHeight);
 		paintTopBar(p);

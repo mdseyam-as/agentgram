@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "window/window_main_menu.h"
 
+#include "agent_ui/agent_ui.h"
+#include "agent_ui/agent_ui_reveal.h"
 #include "ai_agent/ai_agent_panel.h"
 #ifdef AGENTGRAM_BOT_STUDIO
 #include "bot_studio/bot_studio_window.h"
@@ -89,6 +91,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
+
+#include <QtGui/QCursor>
 
 namespace Window {
 namespace {
@@ -373,8 +377,19 @@ MainMenu::MainMenu(
 
 		const auto nightMode = Window::Theme::IsNightMode();
 		if (_nightThemeToggle->toggled() != nightMode) {
-			Window::Theme::ToggleNightMode();
-			Window::Theme::KeepApplied();
+			const auto toggle = [] {
+				Window::Theme::ToggleNightMode();
+				Window::Theme::KeepApplied();
+			};
+			if (AgentUi::Active()) {
+				// AgentUI opens its other palette from the toggle.
+				AgentUi::RunReveal(
+					_controller->widget(),
+					QCursor::pos(),
+					toggle);
+			} else {
+				toggle();
+			}
 		}
 	});
 

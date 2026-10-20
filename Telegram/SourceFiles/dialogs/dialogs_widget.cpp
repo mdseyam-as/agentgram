@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/dialogs_widget.h"
 
+#include "agent_ui/agent_ui_glass.h"
+
 #include "base/call_delayed.h"
 #include "base/qt/qt_key_modifiers.h"
 #include "base/options.h"
@@ -431,6 +433,7 @@ Widget::Widget(
 , _searchTimer([=] { search(); })
 , _peerSearch(&controller->session(), Api::PeerSearch::Type::WithSponsored)
 , _singleMessageSearch(&controller->session()) {
+	AgentUi::RegisterGlassRoot(this, AgentUi::Surface::ChatList);
 	const auto makeChildListShown = [](PeerId peerId, float64 shown) {
 		return InnerWidget::ChildListShown{ peerId, shown };
 	};
@@ -4887,6 +4890,12 @@ void Widget::paintEvent(QPaintEvent *e) {
 		_showAnimation->paintContents(p);
 		return;
 	}
+	Ui::AgentSurface::Fill(
+		p,
+		this,
+		r,
+		st::transparent,
+		Ui::AgentSurface::Kind::ChatList);
 	const auto bg = anim::brush(
 		st::dialogsBg,
 		st::dialogsBgOver,

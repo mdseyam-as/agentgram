@@ -7,6 +7,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/dialogs_inner_widget.h"
 
+#include "agent_ui/agent_ui.h"
+#include "agent_ui/agent_ui_glass.h"
+#include "agent_ui/agent_ui_pills.h"
+
 #include "dialogs/dialogs_three_state_icon.h"
 #include "dialogs/ui/chat_search_empty.h"
 #include "dialogs/ui/chat_search_in.h"
@@ -1029,6 +1033,14 @@ void InnerWidget::paintEvent(QPaintEvent *e) {
 	const auto activeEntry = _controller->activeChatEntryCurrent();
 	const auto videoPaused = _controller->isGifPausedAtLeastFor(
 		Window::GifPauseReason::Any);
+	const auto agentPills = agentPillsShown();
+	const auto pillsScope = AgentUi::RowPillsScope(agentPills);
+	if (agentPills) {
+		paintAgentPills(p, activeEntry);
+	} else if (_agentActivePill) {
+		_agentActivePill->stop();
+		_agentHoverPill->stop();
+	}
 	auto fullWidth = width();
 	const auto r = e->rect();
 	auto dialogsClip = r;
@@ -1216,6 +1228,15 @@ void InnerWidget::paintEvent(QPaintEvent *e) {
 					if (view) {
 						view->resetLastPaintGeometry();
 					}
+					if (AgentUi::Active()) {
+						// Glass list: rows keep the backdrop visible.
+						const auto ratio = image.devicePixelRatio();
+						image = QImage(
+							image.size(),
+							QImage::Format_ARGB32_Premultiplied);
+						image.setDevicePixelRatio(ratio);
+						image.fill(Qt::transparent);
+					}
 					auto q = Painter(&image);
 					q.setInactive(p.inactive());
 					Ui::RowPainter::Paint(q, row, nullptr, context);
@@ -1230,7 +1251,15 @@ void InnerWidget::paintEvent(QPaintEvent *e) {
 							row->userpicView())
 						: std::pair<uint64, uint64>();
 					if (!cached.badge.isEmpty()) {
-						q.fillRect(cached.badge, st::dialogsBg);
+						if (AgentUi::Active()) {
+							q.setCompositionMode(
+								QPainter::CompositionMode_Clear);
+							q.fillRect(cached.badge, Qt::transparent);
+							q.setCompositionMode(
+								QPainter::CompositionMode_SourceOver);
+						} else {
+							q.fillRect(cached.badge, st::dialogsBg);
+						}
 					}
 					_cachedRows[cacheKey] = std::move(cached);
 				});
@@ -3419,6 +3448,47 @@ void InnerWidget::repaintCollapsedFolderRow(not_null<Data::Folder*> folder) {
 			return;
 		}
 	}
+}
+
+bool InnerWidget::agentPillsShown() const {
+	return AgentUi::Active()
+		&& (_state == WidgetState::Default)
+		&& !communityModeShown();
+}
+
+void InnerWidget::paintAgentPills(
+		QPainter &p,
+		const RowDescriptor &activeEntry) {
+	if (!_agentActivePill) {
+		const auto repaint = [=](QRect rect) {
+			update(rect);
+		};
+		_agentActivePill = std::make_unique<AgentUi::SlidingPill>(repaint);
+		_agentHoverPill = std::make_unique<AgentUi::SlidingPill>(repaint);
+	}
+	const auto rowRect = [&](Row *row) -> std::optional<QRect> {
+		if (!row) {
+			return std::nullopt;
+		}
+		return QRect(0, defaultRowTop(row), width(), row->height());
+	};
+	const auto active = activeEntry.key
+		? _shownList->getRow(activeEntry.key)
+		: nullptr;
+	auto hovered = _menuRow.key
+		? _shownList->getRow(_menuRow.key)
+		: _chatPreviewRow.key
+		? _shownList->getRow(_chatPreviewRow.key)
+		: isPressed()
+		? _pressed
+		: _selected;
+	if (hovered == active) {
+		hovered = nullptr;
+	}
+	_agentActivePill->setTarget(rowRect(active));
+	_agentHoverPill->setTarget(rowRect(hovered));
+	_agentHoverPill->paint(p, false);
+	_agentActivePill->paint(p, true);
 }
 
 int InnerWidget::defaultRowTop(not_null<Row*> row) const {

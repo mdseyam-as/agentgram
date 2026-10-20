@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "chat_helpers/bot_keyboard.h"
 
+#include "ui/agent_surface.h"
+
 #include "api/api_bot.h"
 #include "core/click_handler_types.h"
 #include "data/data_session.h"
@@ -202,7 +204,12 @@ void BotKeyboard::paintEvent(QPaintEvent *e) {
 	Painter p(this);
 
 	auto clip = e->rect();
-	p.fillRect(clip, st::historyComposeAreaBg);
+	Ui::AgentSurface::Fill(
+		p,
+		this,
+		clip,
+		st::historyComposeAreaBg,
+		Ui::AgentSurface::Kind::Composer);
 
 	if (_impl) {
 		int x = rtl() ? st::botKbScroll.width : _st->margin;

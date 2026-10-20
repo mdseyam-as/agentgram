@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/history_widget.h"
 
+#include "agent_ui/agent_ui_glass.h"
+
 #include "api/api_compose_with_ai.h"
 #include "api/api_editing.h"
 #include "api/api_bot.h"
@@ -365,6 +367,10 @@ HistoryWidget::HistoryWidget(
 		return _list && _list->itemTop(view) >= 0;
 	}))
 , _topShadow(this) {
+	AgentUi::RegisterGlassRoot(this, AgentUi::Surface::Bar);
+	// The field background turns into glass in AgentUI, so the widget
+	// below has to be painted under it.
+	_field->setAttribute(Qt::WA_OpaquePaintEvent, false);
 	setAcceptDrops(true);
 	setVisualTabOrder(true);
 
@@ -11287,7 +11293,13 @@ void HistoryWidget::drawField(Painter &p, const QRect &rect) {
 	}
 	p.setInactive(
 		controller()->isGifPausedAtLeastFor(Window::GifPauseReason::Any));
-	p.fillRect(myrtlrect(0, backy, width(), backh), st::historyReplyBg);
+	Ui::AgentSurface::Fill(
+		p,
+		this,
+		myrtlrect(0, backy, width(), backh),
+		st::historyReplyBg,
+		Ui::AgentSurface::Kind::Composer,
+		RectPart::Top);
 
 	const auto media = (!_previewDrawPreview && drawMsgText)
 		? drawMsgText->media()

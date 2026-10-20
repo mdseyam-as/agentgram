@@ -1,0 +1,179 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c48a77a..a4e84c5 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -300,6 +300,8 @@ PRIVATE
+     ui/wrap/vertical_layout_reorder.h
+     ui/wrap/wrap.h
+     ui/abstract_button.cpp
++    ui/agent_glass.cpp
++    ui/agent_glass.h
+     ui/abstract_button.h
+     ui/animated_icon.cpp
+     ui/animated_icon.h
+diff --git a/ui/agent_glass.cpp b/ui/agent_glass.cpp
+new file mode 100644
+index 0000000..8c09e0e
+--- /dev/null
++++ b/ui/agent_glass.cpp
+@@ -0,0 +1,27 @@
++// This file is part of Desktop App Toolkit,
++// a set of libraries for developing nice desktop applications.
++//
++// For license and copyright information please follow this link:
++// https://github.com/desktop-app/legal/blob/master/LEGAL
++//
++#include "ui/agent_glass.h"
++
++namespace Ui::AgentGlass {
++namespace {
++
++Hooks &Instance() {
++	static auto result = Hooks();
++	return result;
++}
++
++} // namespace
++
++void SetHooks(Hooks hooks) {
++	Instance() = std::move(hooks);
++}
++
++const Hooks &CurrentHooks() {
++	return Instance();
++}
++
++} // namespace Ui::AgentGlass
+diff --git a/ui/agent_glass.h b/ui/agent_glass.h
+new file mode 100644
+index 0000000..501aaed
+--- /dev/null
++++ b/ui/agent_glass.h
+@@ -0,0 +1,39 @@
++// This file is part of Desktop App Toolkit,
++// a set of libraries for developing nice desktop applications.
++//
++// For license and copyright information please follow this link:
++// https://github.com/desktop-app/legal/blob/master/LEGAL
++//
++// Agentgram: hooks that let the application paint frosted glass
++// below popup menus and below the dimmed layer of boxes.
++//
++#pragma once
++
++#include "base/basic_types.h"
++
++class QPainter;
++class QWidget;
++class QPixmap;
++class QRect;
++
++namespace Ui::AgentGlass {
++
++struct Hooks {
++	// Paints the frosted backdrop of a popup menu into `inner`,
++	// in the menu coordinates, before the menu items are painted.
++	// Returns true if the glass replaces the plain menu background.
++	Fn<bool(QPainter&, QWidget *menu, const QRect &inner)> menuBackdrop;
++
++	// Paints the frosted copy of the content below the box layer.
++	// `bodyCache` may be null after the show animation is finished.
++	Fn<void(
++		QPainter&,
++		QWidget *background,
++		const QPixmap &bodyCache,
++		float64 opacity)> layerBackdrop;
++};
++
++void SetHooks(Hooks hooks);
++[[nodiscard]] const Hooks &CurrentHooks();
++
++} // namespace Ui::AgentGlass
+diff --git a/ui/layers/layer_widget.cpp b/ui/layers/layer_widget.cpp
+index ec3171e..03e655b 100644
+--- a/ui/layers/layer_widget.cpp
++++ b/ui/layers/layer_widget.cpp
+@@ -6,6 +6,8 @@
+ //
+ #include "ui/layers/layer_widget.h"
+ 
++#include "ui/agent_glass.h"
++
+ #include "ui/cached_special_layer_shadow_corners.h"
+ #include "ui/layers/box_layer_widget.h"
+ #include "ui/widgets/shadow.h"
+@@ -262,6 +264,9 @@ void LayerStackWidget::BackgroundWidget::paintEvent(QPaintEvent *e) {
+ 		return;
+ 	}
+ 
++	if (const auto &hook = AgentGlass::CurrentHooks().layerBackdrop) {
++		hook(p, this, _bodyCache, bgOpacity);
++	}
+ 	p.setOpacity(bgOpacity);
+ 	auto overSpecialOpacity = (layerOpacity * specialLayerOpacity);
+ 	auto bg = myrtlrect(mainMenuRight, 0, width() - mainMenuRight, height());
+diff --git a/ui/widgets/popup_menu.cpp b/ui/widgets/popup_menu.cpp
+index cb2983e..be16712 100644
+--- a/ui/widgets/popup_menu.cpp
++++ b/ui/widgets/popup_menu.cpp
+@@ -6,6 +6,8 @@
+ //
+ #include "ui/widgets/popup_menu.h"
+ 
++#include "ui/agent_glass.h"
++
+ #include "base/platform/base_platform_info.h"
+ #include "base/invoke_queued.h"
+ #include "base/weak_qptr.h"
+@@ -25,6 +27,7 @@
+ #include <QtGui/QtEvents>
+ #include <QtGui/QCursor>
+ #include <QtGui/QPainter>
++#include <QtGui/QPainterPath>
+ #include <QtGui/QScreen>
+ #include <QtGui/QWindow>
+ #include <QtWidgets/QApplication>
+@@ -223,8 +226,19 @@ void PopupMenu::updateRoundingOverlay() {
+ 		}
+ 		auto p = QPainter(_roundingOverlay.data());
+ 		auto hq = PainterHighQualityEnabler(p);
+-		p.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+-		_roundRect.paint(p, _inner, RectPart::AllCorners);
++		if (_st.menu.itemBg->c.alpha() < 255) {
++			// A translucent (glass) menu background can't be used as
++			// the mask, so the corners are cut out by the shape.
++			auto outside = QPainterPath();
++			outside.addRect(_inner);
++			auto rounded = QPainterPath();
++			rounded.addRoundedRect(_inner, _st.radius, _st.radius);
++			p.setCompositionMode(QPainter::CompositionMode_Clear);
++			p.fillPath(outside.subtracted(rounded), Qt::black);
++		} else {
++			p.setCompositionMode(QPainter::CompositionMode_DestinationIn);
++			_roundRect.paint(p, _inner, RectPart::AllCorners);
++		}
+ 		if (!_grabbingForPanelAnimation) {
+ 			p.setCompositionMode(QPainter::CompositionMode_SourceOver);
+ 			_boxShadow.paint(p, _inner, _st.radius);
+@@ -381,6 +395,9 @@ void PopupMenu::paintEvent(QPaintEvent *e) {
+ }
+ 
+ void PopupMenu::paintBg(QPainter &p) {
++	if (const auto &hook = AgentGlass::CurrentHooks().menuBackdrop) {
++		hook(p, this, _inner);
++	}
+ 	if (!_useTransparency) {
+ 		p.fillRect(0, 0, width() - _padding.right(), _padding.top(), _st.shadowFallback);
+ 		p.fillRect(width() - _padding.right(), 0, _padding.right(), height() - _padding.bottom(), _st.shadowFallback);
+@@ -889,7 +906,10 @@ QImage PopupMenu::grabForPanelAnimation() {
+ 	{
+ 		QPainter p(&result);
+ 		_grabbingForPanelAnimation = true;
+-		p.fillRect(_inner, _st.menu.itemBg);
++		const auto &hook = AgentGlass::CurrentHooks().menuBackdrop;
++		if (!hook || !hook(p, this, _inner)) {
++			p.fillRect(_inner, _st.menu.itemBg);
++		}
+ 		for (const auto child : children()) {
+ 			if (const auto widget = qobject_cast<QWidget*>(child)) {
+ 				// Submenus are windows of their own, they are not a part

@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/ui/dialogs_layout.h"
 
+#include "agent_ui/agent_ui.h"
+
 #include "base/options.h"
 #include "base/unixtime.h"
 #include "core/ui_integration.h"
@@ -465,7 +467,10 @@ void PaintRow(
 	const auto thread = entry->asThread();
 	const auto sublist = entry->asSublist();
 
-	auto bg = context.active
+	const auto pills = AgentUi::RowsUsePills();
+	auto bg = (pills && (context.active || context.selected))
+		? context.currentBg
+		: context.active
 		? st::dialogsBgActive
 		: context.selected
 		? st::dialogsBgOver
@@ -489,7 +494,29 @@ void PaintRow(
 		auto ripple = context.active
 			? st::dialogsRippleBgActive
 			: st::dialogsRippleBg;
-		row->paintRipple(p, 0, 0, context.width, &ripple->c);
+		if (pills) {
+			// The ripple stays inside the rounded pill of the row.
+			const auto inset = std::min(
+				style::ConvertScale(8),
+				geometry.width() / 8);
+			const auto pill = geometry.marginsRemoved({
+				inset,
+				style::ConvertScale(2),
+				inset,
+				style::ConvertScale(2),
+			});
+			const auto radius = std::min(
+				style::ConvertScale(14),
+				pill.height() / 2);
+			auto clip = QPainterPath();
+			clip.addRoundedRect(pill, radius, radius);
+			p.save();
+			p.setClipPath(clip, Qt::IntersectClip);
+			row->paintRipple(p, 0, 0, context.width, &ripple->c);
+			p.restore();
+		} else {
+			row->paintRipple(p, 0, 0, context.width, &ripple->c);
+		}
 	}
 
 	if (flags & Flag::SavedMessages) {

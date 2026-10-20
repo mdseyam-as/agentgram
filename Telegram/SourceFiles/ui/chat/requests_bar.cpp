@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ui/chat/requests_bar.h"
 
+#include "ui/agent_surface.h"
+
 #include "ui/chat/group_call_userpics.h"
 #include "ui/widgets/shadow.h"
 #include "ui/text/text_options.h"
@@ -135,7 +137,13 @@ void RequestsBar::setupInner() {
 }
 
 void RequestsBar::paint(Painter &p) {
-	p.fillRect(_inner->rect(), st::historyComposeAreaBg);
+	Ui::AgentSurface::Fill(
+		p,
+		_inner,
+		_inner->rect(),
+		st::historyComposeAreaBg,
+		Ui::AgentSurface::Kind::Bar,
+		RectPart::Bottom);
 
 	const auto userpicsSize = st::historyRequestsUserpics.size;
 	const auto userpicsTop = st::lineWidth + (st::historyRequestsHeight

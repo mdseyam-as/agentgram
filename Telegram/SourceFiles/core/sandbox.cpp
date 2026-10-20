@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "core/sandbox.h"
 
+#include "agent_ui/agent_ui_glass.h"
+
 #include "base/platform/base_platform_info.h"
 #include "platform/platform_specific.h"
 #include "mainwidget.h"
@@ -783,13 +785,25 @@ bool Sandbox::notify(QObject *receiver, QEvent *e) {
 		}
 	}
 	if (e->type() == QEvent::Paint
-		&& Ui::HasWindowPalettes()
+		&& (Ui::HasWindowPalettes() || AgentUi::HasGlassRoots())
 		&& receiver->isWidgetType()) {
 		// WHY: stock widgets read the one main palette at paint, so a window
 		// with its own palette gets it swapped into the main palette's slots
 		// for exactly the duration of each of its widgets' paint events.
-		const auto scope = style::main_palette::Override(
-			Ui::WindowPaletteFor(static_cast<QWidget*>(receiver)));
+		// Agentgram: AgentUI glass surfaces do the same for their subtrees.
+		const auto widget = static_cast<QWidget*>(receiver);
+		auto palette = Ui::WindowPaletteFor(widget);
+		const auto glass = palette
+			? AgentUi::GlassTarget()
+			: AgentUi::GlassFor(widget);
+		if (!palette) {
+			palette = glass.palette;
+		}
+		const auto scope = style::main_palette::Override(palette);
+		AgentUi::PaintGlassUnderOpaque(
+			widget,
+			glass,
+			static_cast<QPaintEvent*>(e)->rect());
 		return QApplication::notify(receiver, e);
 	}
 	return QApplication::notify(receiver, e);

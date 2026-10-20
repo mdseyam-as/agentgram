@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/controls/history_view_rich_draft_preview.h"
 
+#include "ui/agent_surface.h"
+
 #include "base/weak_ptr.h"
 #include "chat_helpers/spellchecker_common.h"
 #include "data/data_drafts.h"
@@ -173,7 +175,12 @@ void RichDraftPreview::paint(QRect clip) {
 	Painter p(this);
 	const auto paused = _paused && _paused();
 	p.setInactive(paused);
-	p.fillRect(rect(), st::historyComposeAreaBg);
+	Ui::AgentSurface::Fill(
+		p,
+		this,
+		rect(),
+		st::historyComposeAreaBg,
+		Ui::AgentSurface::Kind::Composer);
 
 	if (_style && (_paletteVersion != _style->paletteVersion())) {
 		_paletteVersion = _style->paletteVersion();

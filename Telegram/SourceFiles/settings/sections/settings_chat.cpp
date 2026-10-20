@@ -11,6 +11,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "base/timer_rpl.h"
 #include "settings/settings_builder.h"
+
+#include "agent_ui/agent_ui_settings.h"
 #include "settings/sections/settings_advanced.h"
 #include "settings/sections/settings_main.h"
 #include "settings/sections/settings_privacy_security.h"
@@ -1223,7 +1225,31 @@ void BuildSupportSection(SectionBuilder &builder) {
 	builder.addSkip();
 }
 
+void BuildDesignSection(SectionBuilder &builder) {
+	const auto controller = builder.controller();
+
+	builder.add([controller](const WidgetContext &ctx) {
+		AgentUi::SetupDesignSettings(controller, ctx.container.get());
+		return SectionBuilder::WidgetToAdd{};
+	}, [] {
+		return SearchEntry{
+			.id = u"chat/design"_q,
+			.title = u"Дизайн интерфейса"_q,
+			.keywords = {
+				u"design"_q,
+				u"agentui"_q,
+				u"vanilla"_q,
+				u"glass"_q,
+				u"дизайн"_q,
+				u"стекло"_q,
+			},
+			.icon = { &st::menuIconPalette },
+		};
+	});
+}
+
 void BuildChatSectionContent(SectionBuilder &builder) {
+	BuildDesignSection(builder);
 	BuildThemeOptionsSection(builder);
 	BuildThemeSettingsSection(builder);
 	BuildCloudThemesSection(builder);

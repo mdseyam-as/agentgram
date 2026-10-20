@@ -5,6 +5,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ai_agent/ai_agent_panel.h"
 
+#include "agent_ui/agent_ui.h"
+#include "agent_ui/agent_ui_glass.h"
+
 #include "ai_agent/ai_agent_manager.h"
 #include "ai_agent/ai_agent_markdown.h"
 #include "ai_agent/ai_agent_settings_box.h"
@@ -34,6 +37,18 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace AiAgent {
 namespace {
+
+[[nodiscard]] QColor AssistantBg() {
+	return AgentUi::Active()
+		? AgentUi::FieldTint()
+		: st::aiAgentAssistantBg->c;
+}
+
+[[nodiscard]] QColor OpaqueWindowBg() {
+	auto result = st::windowBg->c;
+	result.setAlpha(255);
+	return result;
+}
 
 constexpr auto kSpinnerPeriod = crl::time(900);
 
@@ -425,7 +440,7 @@ void EntryWidget::paintEvent(QPaintEvent *e) {
 			: st::aiAgentToolBorderFg->c);
 		pen.setWidth(confirm ? border * 2 : border);
 		p.setPen(pen);
-		p.setBrush(confirm ? st::aiAgentAssistantBg->c : Qt::transparent);
+		p.setBrush(confirm ? AssistantBg() : QColor(Qt::transparent));
 		const auto inner = _bubble.marginsRemoved(
 			QMargins(border, border, border, border));
 		p.drawRoundedRect(
@@ -439,7 +454,7 @@ void EntryWidget::paintEvent(QPaintEvent *e) {
 		switch (_type) {
 		case Entry::Type::User: return st::aiAgentUserBubbleBg->c;
 		case Entry::Type::Error: return st::aiAgentErrorBg->c;
-		default: return st::aiAgentAssistantBg->c;
+		default: return AssistantBg();
 		}
 	}();
 	p.setPen(Qt::NoPen);
@@ -468,7 +483,7 @@ void EntryWidget::paintToolIcon(QPainter &p, QRect rect) {
 		p.setPen(Qt::NoPen);
 		p.setBrush(st::aiAgentToolDoneFg->c);
 		p.drawEllipse(rect);
-		auto pen = QPen(st::windowBg->c);
+		auto pen = QPen(OpaqueWindowBg());
 		pen.setWidth(line);
 		pen.setCapStyle(Qt::RoundCap);
 		pen.setJoinStyle(Qt::RoundJoin);
@@ -490,7 +505,7 @@ void EntryWidget::paintToolIcon(QPainter &p, QRect rect) {
 			? st::aiAgentToolFailFg->c
 			: st::windowSubTextFg->c);
 		p.drawEllipse(rect);
-		auto pen = QPen(st::windowBg->c);
+		auto pen = QPen(OpaqueWindowBg());
 		pen.setWidth(line);
 		pen.setCapStyle(Qt::RoundCap);
 		p.setPen(pen);
@@ -794,7 +809,12 @@ void Panel::setupComposer() {
 		auto p = QPainter(composer);
 		auto hq = PainterHighQualityEnabler(p);
 		p.setPen(Qt::NoPen);
-		p.setBrush(st::aiAgentComposerBg);
+		if (AgentUi::Active()) {
+			p.setPen(QPen(AgentUi::FieldEdge(), 1.));
+			p.setBrush(AgentUi::FieldTint());
+		} else {
+			p.setBrush(st::aiAgentComposerBg);
+		}
 		const auto &padding = st::aiAgentComposerPadding;
 		const auto rect = QRect(
 			padding.left(),
@@ -958,7 +978,12 @@ void Panel::updateControlsGeometry() {
 
 void Panel::paintEvent(QPaintEvent *e) {
 	auto p = QPainter(this);
-	p.fillRect(e->rect(), st::aiAgentPanelBg);
+	AgentUi::FillSurface(
+		p,
+		this,
+		e->rect(),
+		st::aiAgentPanelBg,
+		AgentUi::Surface::Panel);
 }
 
 namespace {

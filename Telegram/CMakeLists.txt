@@ -7,6 +7,8 @@
 add_executable(Telegram WIN32 MACOSX_BUNDLE)
 init_non_host_target(Telegram)
 
+include(cmake/agentgram_patches.cmake)
+
 add_subdirectory(lib_rpl)
 add_subdirectory(lib_crl)
 add_subdirectory(lib_base)
@@ -125,6 +127,16 @@ PRIVATE
 
     api/api_attached_stickers.cpp
     api/api_attached_stickers.h
+    agent_ui/agent_ui.cpp
+    agent_ui/agent_ui.h
+    agent_ui/agent_ui_glass.cpp
+    agent_ui/agent_ui_glass.h
+    agent_ui/agent_ui_pills.cpp
+    agent_ui/agent_ui_pills.h
+    agent_ui/agent_ui_reveal.cpp
+    agent_ui/agent_ui_reveal.h
+    agent_ui/agent_ui_settings.cpp
+    agent_ui/agent_ui_settings.h
     ai_agent/ai_agent_config.cpp
     ai_agent/ai_agent_config.h
     ai_agent/ai_agent_llm.cpp

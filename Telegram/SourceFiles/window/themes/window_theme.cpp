@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "window/themes/window_theme.h"
 
+#include "agent_ui/agent_ui.h"
+
 #include "window/themes/window_theme_preview.h"
 #include "window/themes/window_themes_chat.h"
 #include "window/themes/window_themes_embedded.h"
@@ -1258,6 +1260,14 @@ void ChatBackground::reapplyWithNightMode(
 	auto path = read.object.pathAbsolute;
 
 	_nightMode = oldNightMode;
+	if (!settingExactTheme) {
+		// Agentgram: AgentUI toggles between its own dark and light
+		// palettes, Vanilla never lands in an AgentUI palette.
+		if (auto exact = AgentUi::NightModeThemeOverride(newNightMode, path)) {
+			reapplyWithNightMode(std::move(exact), newNightMode);
+			return;
+		}
+	}
 	auto oldTileValue = (_nightMode ? _tileNightValue : _tileDayValue);
 	const auto alreadyOnDisk = [&] {
 		if (read.object.content.isEmpty()) {

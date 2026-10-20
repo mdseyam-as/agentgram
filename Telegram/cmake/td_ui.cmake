@@ -474,6 +474,8 @@ PRIVATE
     ui/chat/chats_filter_tag.h
     ui/chat/forward_options_box.cpp
     ui/chat/forward_options_box.h
+    ui/agent_surface.cpp
+    ui/agent_surface.h
     ui/chat/group_call_bar.cpp
     ui/chat/group_call_bar.h
     ui/chat/group_call_userpics.cpp

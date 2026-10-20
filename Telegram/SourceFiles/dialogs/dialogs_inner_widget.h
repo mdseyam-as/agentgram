@@ -27,6 +27,10 @@ struct DialogRow;
 struct DialogRightButton;
 } // namespace style
 
+namespace AgentUi {
+class SlidingPill;
+} // namespace AgentUi
+
 namespace Api {
 struct PeerSearchResult;
 } // namespace Api
@@ -413,6 +417,8 @@ private:
 	bool hasHistoryInResults(not_null<History*> history) const;
 
 	int defaultRowTop(not_null<Row*> row) const;
+	[[nodiscard]] bool agentPillsShown() const;
+	void paintAgentPills(QPainter &p, const RowDescriptor &activeEntry);
 	void setupOnlineStatusCheck();
 	void jumpToTop();
 
@@ -670,6 +676,8 @@ private:
 	bool _skipTopDialog = false;
 	Row *_selected = nullptr;
 	Row *_pressed = nullptr;
+	std::unique_ptr<AgentUi::SlidingPill> _agentActivePill;
+	std::unique_ptr<AgentUi::SlidingPill> _agentHoverPill;
 	MsgId _pressedTopicJumpRootId;
 	PeerId _pressedSublistJumpPeerId;
 	bool _selectedTopicJump = false;

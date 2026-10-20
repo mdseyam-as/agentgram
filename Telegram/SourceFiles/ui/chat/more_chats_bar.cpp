@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ui/chat/more_chats_bar.h"
 
+#include "ui/agent_surface.h"
+
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/shadow.h"
 #include "ui/text/text_options.h"
@@ -111,7 +113,13 @@ void MoreChatsBar::setupInner() {
 }
 
 void MoreChatsBar::paint(Painter &p) {
-	p.fillRect(_inner->rect(), st::historyComposeAreaBg);
+	Ui::AgentSurface::Fill(
+		p,
+		_inner,
+		_inner->rect(),
+		st::historyComposeAreaBg,
+		Ui::AgentSurface::Kind::Bar,
+		RectPart::Bottom);
 
 	const auto width = std::max(
 		_inner->width(),

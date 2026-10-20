@@ -18,6 +18,8 @@
     <file alias="night-green.tdesktop-theme">../../night-green.tdesktop-theme</file>
     <file alias="day-custom-base.tdesktop-theme">../../day-custom-base.tdesktop-theme</file>
     <file alias="night-custom-base.tdesktop-theme">../../night-custom-base.tdesktop-theme</file>
+    <file alias="agentui-dark.tdesktop-theme">../../agentui-dark.tdesktop-theme</file>
+    <file alias="agentui-light.tdesktop-theme">../../agentui-light.tdesktop-theme</file>
     <file alias="icons/calls/hands.lottie">../../icons/calls/hands.lottie</file>
     <file alias="icons/calls/voice.lottie">../../icons/calls/voice.lottie</file>
     <file alias="recording/info_audio.svg">../../art/recording/recording_info_audio.svg</file>

@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/controls/history_view_compose_search.h"
 
+#include "ui/agent_surface.h"
+
 #include "api/api_messages_search_merged.h"
 #include "boxes/peer_list_box.h"
 #include "core/click_handler_types.h"
@@ -287,7 +289,12 @@ List CreateList(
 	) | rpl::on_next([weak = base::make_weak(list.container.get())](
 			const QRect &r) {
 		auto p = QPainter(weak.get());
-		p.fillRect(r, st::dialogsBg);
+		Ui::AgentSurface::Fill(
+			p,
+			weak.get(),
+			r,
+			st::dialogsBg,
+			Ui::AgentSurface::Kind::Composer);
 	}, list.container->lifetime());
 
 	std::move(
@@ -399,7 +406,12 @@ TopBar::TopBar(
 	paintRequest(
 	) | rpl::on_next([=](const QRect &r) {
 		auto p = QPainter(this);
-		p.fillRect(r, st::dialogsBg);
+		Ui::AgentSurface::Fill(
+			p,
+			this,
+			r,
+			st::dialogsBg,
+			Ui::AgentSurface::Kind::Composer);
 	}, lifetime());
 
 	_select->setQueryChangedCallback([=](const QString &) {
@@ -545,7 +557,12 @@ void TopBar::refreshTags() {
 
 	parent->paintRequest() | rpl::on_next([=](const QRect &r) {
 		auto p = Painter(parent);
-		p.fillRect(r, st::dialogsBg);
+		Ui::AgentSurface::Fill(
+			p,
+			parent,
+			r,
+			st::dialogsBg,
+			Ui::AgentSurface::Kind::Composer);
 		_searchTags->paint(p, position, crl::now(), false);
 	}, parent->lifetime());
 
@@ -745,7 +762,12 @@ BottomBar::BottomBar(not_null<Ui::RpWidget*> parent, bool fastShowChooseFrom)
 	paintRequest(
 	) | rpl::on_next([=](const QRect &r) {
 		auto p = QPainter(this);
-		p.fillRect(r, st::dialogsBg);
+		Ui::AgentSurface::Fill(
+			p,
+			this,
+			r,
+			st::dialogsBg,
+			Ui::AgentSurface::Kind::Composer);
 	}, lifetime());
 
 	_current.value(
