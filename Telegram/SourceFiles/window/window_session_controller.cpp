@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "window/window_session_controller.h"
 
+#include "agent_ui/agent_ui.h"
+
 #ifdef AGENTGRAM_BOT_STUDIO
 #include "bot_studio/bot_studio_manager.h"
 #endif // AGENTGRAM_BOT_STUDIO
@@ -3695,6 +3697,11 @@ void SessionController::pushDefaultChatBackground() {
 		if (variant) {
 			bubbles = Theme::PrepareBubblesData(cloud, *variant);
 		}
+	}
+	if (bubbles.colors.empty() && AgentUi::Active()) {
+		// AgentUI: outgoing bubbles share one gradient across the chat.
+		bubbles.colors = AgentUi::OutgoingBubbleColors();
+		bubbles.dark = AgentUi::Dark();
 	}
 	if (bubbles.colors != _defaultChatThemeBubblesColors) {
 		_defaultChatThemeBubblesColors = bubbles.colors;

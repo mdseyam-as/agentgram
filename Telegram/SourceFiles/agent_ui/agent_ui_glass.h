@@ -31,6 +31,22 @@ void PaintGlass(
 	Surface surface,
 	RectParts edges = RectPart::None);
 
+// Floating card layout of AgentUI: the chat list is a rounded card in
+// a darker frame, the message field a floating capsule.
+[[nodiscard]] QMargins CardMargins();
+[[nodiscard]] int CardRadius();
+[[nodiscard]] QColor FrameTint();
+void PaintCapsule(
+	QPainter &p,
+	not_null<const QWidget*> widget,
+	QRect capsule);
+void PaintFloating(
+	QPainter &p,
+	not_null<const QWidget*> widget,
+	QRect card,
+	Surface surface,
+	int maxRadius);
+
 // Glass when AgentUI is active, a plain `fallback` fill otherwise.
 void FillSurface(
 	QPainter &p,

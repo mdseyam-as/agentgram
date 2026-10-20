@@ -28,6 +28,9 @@ void Start();
 [[nodiscard]] Design CurrentDesign();
 [[nodiscard]] rpl::producer<Design> DesignValue();
 
+// Gradient of outgoing message bubbles in AgentUI.
+[[nodiscard]] std::vector<QColor> OutgoingBubbleColors();
+
 [[nodiscard]] bool IsAgentThemePath(const QString &path);
 [[nodiscard]] QString ThemePath(bool dark);
 

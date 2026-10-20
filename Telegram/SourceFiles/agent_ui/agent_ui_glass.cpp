@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_basic.h"
 
 #include <QtCore/QPointer>
+#include <QtGui/QPainterPath>
 #include <QtWidgets/QApplication>
 
 #include <random>
@@ -289,8 +290,8 @@ QColor GlassTint(Surface surface) {
 	if (Dark()) {
 		const auto base = QColor(12, 15, 20);
 		switch (surface) {
-		case Surface::ChatList: return WithAlpha(base, 0.56);
-		case Surface::Folders: return WithAlpha(QColor(16, 19, 25), 0.50);
+		case Surface::ChatList: return WithAlpha(QColor(18, 22, 29), 0.46);
+		case Surface::Folders: return FrameTint();
 		case Surface::Header: return WithAlpha(base, 0.50);
 		case Surface::Composer: return WithAlpha(base, 0.54);
 		case Surface::Bar: return WithAlpha(base, 0.48);
@@ -299,8 +300,8 @@ QColor GlassTint(Surface surface) {
 	} else {
 		const auto base = QColor(248, 250, 252);
 		switch (surface) {
-		case Surface::ChatList: return WithAlpha(base, 0.58);
-		case Surface::Folders: return WithAlpha(QColor(234, 239, 244), 0.66);
+		case Surface::ChatList: return WithAlpha(base, 0.66);
+		case Surface::Folders: return FrameTint();
 		case Surface::Header: return WithAlpha(base, 0.54);
 		case Surface::Composer: return WithAlpha(base, 0.60);
 		case Surface::Bar: return WithAlpha(base, 0.50);
@@ -374,6 +375,35 @@ void PaintGlass(
 	if (rect.isEmpty()) {
 		return;
 	}
+	if (surface == Surface::ChatList) {
+		// The chat list floats as a rounded glass card inside a darker
+		// frame of the same backdrop.
+		const auto root = GlassFor(widget).root;
+		const auto card = root
+			? QRect(
+				widget->mapFrom(root, QPoint()),
+				root->size()).marginsRemoved(CardMargins())
+			: widget->rect().marginsRemoved(CardMargins());
+		PaintBackdrop(p, widget, rect);
+		auto hq = PainterHighQualityEnabler(p);
+		const auto radius = float64(CardRadius());
+		auto cardPath = QPainterPath();
+		cardPath.addRoundedRect(QRectF(card), radius, radius);
+		if (!card.contains(rect)) {
+			auto frame = QPainterPath();
+			frame.addRect(QRectF(rect));
+			p.fillPath(frame.subtracted(cardPath), FrameTint());
+		}
+		p.save();
+		p.setClipRect(rect);
+		p.fillPath(cardPath, GlassTint(surface));
+		PaintGrain(p, widget, rect, GrainOpacity());
+		p.setPen(QPen(EdgeColor(), 1.));
+		p.setBrush(Qt::NoBrush);
+		p.drawPath(cardPath.translated(0.5, 0.5));
+		p.restore();
+		return;
+	}
 	PaintBackdrop(p, widget, rect);
 	p.fillRect(rect, GlassTint(surface));
 	PaintGrain(p, widget, rect, GrainOpacity());
@@ -410,6 +440,76 @@ void PaintGlass(
 				color);
 		}
 	}
+}
+
+QMargins CardMargins() {
+	const auto skip = style::ConvertScale(6);
+	return { skip, skip, skip, skip };
+}
+
+int CardRadius() {
+	return style::ConvertScale(16);
+}
+
+QColor FrameTint() {
+	return Dark()
+		? QColor(7, 9, 12, 205)
+		: QColor(222, 229, 236, 190);
+}
+
+void PaintCapsule(
+		QPainter &p,
+		not_null<const QWidget*> widget,
+		QRect capsule) {
+	PaintFloating(
+		p,
+		widget,
+		capsule,
+		Surface::Composer,
+		style::ConvertScale(22));
+}
+
+void PaintFloating(
+		QPainter &p,
+		not_null<const QWidget*> widget,
+		QRect capsule,
+		Surface surface,
+		int maxRadius) {
+	if (capsule.isEmpty()) {
+		return;
+	}
+	auto hq = PainterHighQualityEnabler(p);
+	const auto radius = std::min(
+		float64(maxRadius),
+		capsule.height() / 2.);
+	auto path = QPainterPath();
+	path.addRoundedRect(QRectF(capsule), radius, radius);
+
+	// Soft shadow under the floating capsule.
+	const auto shadow = Dark() ? 70 : 26;
+	for (auto i = 1; i <= 3; ++i) {
+		auto ring = QPainterPath();
+		const auto grow = style::ConvertScale(2.) * i;
+		ring.addRoundedRect(
+			QRectF(capsule).marginsAdded({ grow, grow * 0.5, grow, grow * 1.5 }),
+			radius + grow,
+			radius + grow);
+		p.fillPath(ring.subtracted(path), QColor(0, 0, 0, shadow / (i * 2)));
+	}
+
+	p.save();
+	p.setClipPath(path);
+	PaintBackdrop(p, widget, capsule);
+	p.fillRect(capsule, GlassTint(surface));
+	PaintGrain(p, widget, capsule, GrainOpacity());
+	auto gloss = QLinearGradient(capsule.topLeft(), capsule.bottomLeft());
+	gloss.setColorAt(0., QColor(255, 255, 255, Dark() ? 18 : 90));
+	gloss.setColorAt(0.45, QColor(255, 255, 255, 0));
+	p.fillRect(capsule, gloss);
+	p.restore();
+	p.setPen(QPen(EdgeColor(), 1.));
+	p.setBrush(Qt::NoBrush);
+	p.drawPath(path);
 }
 
 void FillSurface(
@@ -536,6 +636,31 @@ void PaintGlassUnderOpaque(
 	PaintGlass(p, widget, clip, target.surface);
 }
 
+// Clears the opaque flag of `widget` and its wrappers up to the widget
+// that paints the chat wallpaper. Returns true if anything changed, the
+// widget is repainted then.
+bool MakeSeeThrough(not_null<QWidget*> widget) {
+	auto changed = false;
+	auto w = widget.get();
+	for (auto level = 0; w && !w->isWindow() && level != 4; ++level) {
+		const auto i = GlassRoots().find(w);
+		if (i != end(GlassRoots())
+			&& w != widget.get()
+			&& i->second.surface == Surface::Bar) {
+			break;
+		}
+		if (w->testAttribute(Qt::WA_OpaquePaintEvent)) {
+			w->setAttribute(Qt::WA_OpaquePaintEvent, false);
+			changed = true;
+		}
+		w = w->parentWidget();
+	}
+	if (changed) {
+		widget->update();
+	}
+	return changed;
+}
+
 void InstallGlassHooks() {
 	Ui::AgentGlass::SetHooks({
 		.menuBackdrop = PaintMenuBackdrop,
@@ -549,6 +674,26 @@ void InstallGlassHooks() {
 			RectParts edges) {
 		if (!Active()) {
 			return false;
+		}
+		if (surface == Surface::Header || surface == Surface::Bar) {
+			// Header and bars float as cards over the chat wallpaper,
+			// so the widget below has to be painted around them.
+			if (MakeSeeThrough(const_cast<QWidget*>(widget.get()))) {
+				PaintGlass(p, widget, rect, surface, edges);
+				return true;
+			}
+			const auto skip = style::ConvertScale(8);
+			const auto card = widget->rect().marginsRemoved(
+				(surface == Surface::Header)
+					? QMargins(skip, skip * 3 / 4, skip, skip / 4)
+					: QMargins(skip, skip / 2, skip, skip / 4));
+			PaintFloating(
+				p,
+				widget,
+				card,
+				surface,
+				style::ConvertScale(14));
+			return true;
 		}
 		PaintGlass(p, widget, rect, surface, edges);
 		return true;

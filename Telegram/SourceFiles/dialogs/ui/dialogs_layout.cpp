@@ -497,8 +497,8 @@ void PaintRow(
 		if (pills) {
 			// The ripple stays inside the rounded pill of the row.
 			const auto inset = std::min(
-				style::ConvertScale(8),
-				geometry.width() / 8);
+				style::ConvertScale(12),
+				geometry.width() / 7);
 			const auto pill = geometry.marginsRemoved({
 				inset,
 				style::ConvertScale(2),

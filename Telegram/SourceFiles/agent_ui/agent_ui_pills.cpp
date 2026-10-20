@@ -122,8 +122,8 @@ void SlidingPill::paint(QPainter &p, bool active) const {
 	}
 	const auto rect = currentRect();
 	const auto horizontal = std::min(
-		float64(style::ConvertScale(8)),
-		rect.width() / 8.);
+		float64(style::ConvertScale(12)),
+		rect.width() / 7.);
 	const auto vertical = float64(style::ConvertScale(2));
 	const auto pill = rect.marginsRemoved({
 		horizontal,

@@ -7,7 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/history_widget.h"
 
+#include "agent_ui/agent_ui.h"
 #include "agent_ui/agent_ui_glass.h"
+#include "agent_ui/agent_ui_reveal.h"
 
 #include "api/api_compose_with_ai.h"
 #include "api/api_editing.h"
@@ -3224,6 +3226,9 @@ void HistoryWidget::showHistory(
 		showAtMsgId = ShowAtTheEndMsgId;
 	}
 
+	if (_history && _peer->id != peerId && AgentUi::Active()) {
+		AgentUi::FadeOutSnapshot(this);
+	}
 	_highlighter.clear();
 	controller()->sendingAnimation().clear();
 	_topToast.hide(anim::type::instant);
@@ -4649,6 +4654,10 @@ void HistoryWidget::newItemAdded(not_null<HistoryItem*> item) {
 				{ ScrollChangeNoJumpToBottom, 0 });
 		}
 		return;
+	}
+
+	if (_list && AgentUi::Active()) {
+		AgentUi::MessageAppeared(item, _list.data());
 	}
 
 	// If we get here in non-resized state we can't rely on results of
@@ -11293,13 +11302,17 @@ void HistoryWidget::drawField(Painter &p, const QRect &rect) {
 	}
 	p.setInactive(
 		controller()->isGifPausedAtLeastFor(Window::GifPauseReason::Any));
-	Ui::AgentSurface::Fill(
-		p,
-		this,
-		myrtlrect(0, backy, width(), backh),
-		st::historyReplyBg,
-		Ui::AgentSurface::Kind::Composer,
-		RectPart::Top);
+	if (AgentUi::Active()) {
+		// AgentUI: the field floats over the wallpaper as a capsule.
+		const auto skip = style::ConvertScale(8);
+		AgentUi::PaintCapsule(
+			p,
+			this,
+			myrtlrect(0, backy, width(), backh).marginsRemoved(
+				{ skip, skip / 2, skip, skip }));
+	} else {
+		p.fillRect(myrtlrect(0, backy, width(), backh), st::historyReplyBg);
+	}
 
 	const auto media = (!_previewDrawPreview && drawMsgText)
 		? drawMsgText->media()

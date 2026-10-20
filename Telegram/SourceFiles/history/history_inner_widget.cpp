@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/history_inner_widget.h"
 
+#include "agent_ui/agent_ui_reveal.h"
+
 #include "api/api_polls.h"
 #include "chat_helpers/stickers_emoji_pack.h"
 #include "core/application.h"
@@ -1690,7 +1692,17 @@ void HistoryInner::paintEvent(QPaintEvent *e) {
 				context.fullMessageSelected = selection.fullMessageSelected;
 				context.messageSelection = selection.messageSelection;
 				context.highlight = _widget->itemHighlight(item);
-				view->draw(p, context);
+				if (const auto appear = AgentUi::MessageAppearProgress(item)) {
+					// AgentUI: new messages rise into place.
+					const auto eased = 1. - std::pow(1. - *appear, 3);
+					p.save();
+					p.setOpacity(eased);
+					p.translate(0., style::ConvertScale(16.) * (1. - eased));
+					view->draw(p, context);
+					p.restore();
+				} else {
+					view->draw(p, context);
+				}
 				processPainted(view, top, height);
 			}
 			top += height;

@@ -261,6 +261,20 @@ rpl::producer<Design> DesignValue() {
 	return DesignVariable().value();
 }
 
+std::vector<QColor> OutgoingBubbleColors() {
+	return Dark()
+		? std::vector<QColor>{
+			QColor(0x1d, 0x66, 0x72),
+			QColor(0x1b, 0x4d, 0x6c),
+			QColor(0x26, 0x3c, 0x6c),
+		}
+		: std::vector<QColor>{
+			QColor(0xc4, 0xec, 0xef),
+			QColor(0xcb, 0xe2, 0xf6),
+			QColor(0xd6, 0xda, 0xf6),
+		};
+}
+
 bool IsAgentThemePath(const QString &path) {
 	return (path == kDarkTheme.utf16()) || (path == kLightTheme.utf16());
 }
