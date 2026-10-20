@@ -6,6 +6,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "bot_studio/bot_studio_flow_editor.h"
 
 #include "bot_studio/bot_studio_flow.h"
+#include "bot_studio/bot_studio_glass.h"
 #include "bot_studio/bot_studio_manager.h"
 #include "base/event_filter.h"
 #include "ui/boxes/confirm_box.h"
@@ -54,6 +55,46 @@ constexpr auto kMaxTextLines = 3;
 [[nodiscard]] QColor WithAlpha(QColor color, int alpha) {
 	color.setAlpha(alpha);
 	return color;
+}
+
+// A floating glass card: the window glass clipped to a rounded rect
+// with a thin edge, so it stays readable over the canvas.
+void PaintGlassCard(
+		QPainter &p,
+		not_null<const QWidget*> widget,
+		QRectF rect,
+		float64 radius) {
+	auto path = QPainterPath();
+	path.addRoundedRect(rect, radius, radius);
+	p.save();
+	p.setClipPath(path);
+	AgentUi::PaintGlass(
+		p,
+		widget,
+		rect.toAlignedRect(),
+		AgentUi::Surface::Panel);
+	p.restore();
+	p.setPen(QPen(AgentUi::FieldEdge(), 1.));
+	p.setBrush(Qt::NoBrush);
+	p.drawPath(path);
+}
+
+// The canvas of the editor in AgentUI: a soft tinted gradient laid over
+// the window glass instead of a flat fill.
+void PaintCanvasBackdrop(QPainter &p, QRectF rect) {
+	const auto dark = AgentUi::Dark();
+	const auto shape = rect.marginsRemoved({ .5, .5, .5, .5 });
+	const auto radius = float64(st::botStudioCardRadius);
+	p.setPen(Qt::NoPen);
+	p.setBrush(dark ? QColor(0, 0, 0, 56) : QColor(255, 255, 255, 72));
+	p.drawRoundedRect(shape, radius, radius);
+	auto gradient = QLinearGradient(rect.topLeft(), rect.bottomRight());
+	gradient.setColorAt(0., QColor(0x72, 0xd5, 0xfd, dark ? 22 : 40));
+	gradient.setColorAt(.55, QColor(0x66, 0x5f, 0xff, dark ? 10 : 14));
+	gradient.setColorAt(1., QColor(0xd6, 0x69, 0xed, dark ? 20 : 30));
+	p.setBrush(gradient);
+	p.setPen(QPen(AgentUi::FieldEdge(), 1.));
+	p.drawRoundedRect(shape, radius, radius);
 }
 
 [[nodiscard]] not_null<Ui::RoundButton*> MakeButton(
@@ -1393,16 +1434,26 @@ void FlowCanvas::paintNode(
 	const auto color = NodeColor(flow, key);
 	const auto shape = NodeShape(rect, trigger);
 
-	// Soft shadow.
+	// Soft shadow, only outside of a translucent glass card.
+	const auto glass = Glass();
+	const auto shadow = NodeShape(rect.translated(0, 3), trigger);
 	p.setPen(Qt::NoPen);
 	p.setBrush(WithAlpha(QColor(0, 0, 0), selected ? 60 : 32));
-	p.drawPath(NodeShape(rect.translated(0, 3), trigger));
+	p.drawPath(glass ? shadow.subtracted(shape) : shadow);
 
-	p.setBrush(st::botStudioCardBg);
+	if (glass) {
+		// A frosted base keeps the text readable, the field tint and a
+		// light edge make the card read as a glass plate.
+		p.setBrush(AgentUi::GlassTint(AgentUi::Surface::Panel));
+		p.drawPath(shape);
+	}
+	p.setBrush(InnerFill(st::botStudioCardBg));
 	p.setPen(selected
 		? QPen(st::windowBgActive->c, 2)
 		: (key == _hoverNode || key == _linkOver)
 		? QPen(WithAlpha(st::windowBgActive->c, 160), 1.5)
+		: glass
+		? QPen(AgentUi::FieldEdge(), 1)
 		: QPen(WithAlpha(st::botStudioCardBorder->c, 120), 1));
 	p.drawPath(shape);
 
@@ -1479,7 +1530,7 @@ void FlowCanvas::paintNode(
 		const auto &row = rows[i];
 		const auto r = layout.rows[i];
 		p.setPen(Qt::NoPen);
-		p.setBrush(st::botStudioNodeButtonBg);
+		p.setBrush(InnerFill(st::botStudioNodeButtonBg));
 		p.drawRoundedRect(r, r.height() / 2., r.height() / 2.);
 		const auto suffix = row.link
 			? u"  🔗"_q
@@ -1523,14 +1574,14 @@ void FlowCanvas::paintPorts(
 		p.setPen(QPen(WithAlpha(sub, (_drag == Drag::Link && key == _linkOver) ? 255 : 190), 1.5));
 		p.setBrush((_drag == Drag::Link && key == _linkOver)
 			? st::windowBgActive->c
-			: st::botStudioCardBg->c);
+			: SolidFill(st::botStudioCardBg));
 		p.drawEllipse(layout.input, kPortRadius, kPortRadius);
 	}
 	for (const auto &port : layout.ports) {
 		const auto connected = !port.target.isEmpty()
 			&& FlowBlockIndex(_state->flow, port.target) >= 0;
 		if (connected) {
-			p.setPen(QPen(st::botStudioCardBg->c, 1.5));
+			p.setPen(QPen(SolidFill(st::botStudioCardBg), 1.5));
 			p.setBrush(port.color);
 			p.drawEllipse(port.pos, kPortRadius + 0.5, kPortRadius + 0.5);
 			continue;
@@ -1539,14 +1590,16 @@ void FlowCanvas::paintPorts(
 		const auto hover = _hoverPlus && (*_hoverPlus == port.ref);
 		p.setPen(QPen(WithAlpha(sub, 140), 1.5));
 		p.drawLine(port.pos + QPointF(kPortRadius, 0), plus - QPointF(kPlusRadius, 0));
-		p.setBrush(st::botStudioCardBg);
+		p.setBrush(SolidFill(st::botStudioCardBg));
 		p.setPen(QPen(port.color, 1.8));
 		p.drawEllipse(port.pos, kPortRadius, kPortRadius);
 		const auto box = QRectF(
 			plus - QPointF(kPlusRadius, kPlusRadius),
 			QSizeF(kPlusRadius * 2, kPlusRadius * 2));
 		p.setPen(QPen(hover ? st::windowBgActive->c : WithAlpha(sub, 170), 1.4));
-		p.setBrush(hover ? st::windowBgActive->c : st::botStudioCardBg->c);
+		p.setBrush(hover
+			? st::windowBgActive->c
+			: SolidFill(st::botStudioCardBg));
 		p.drawRoundedRect(box, 4, 4);
 		p.setPen(QPen(hover ? st::windowFgActive->c : sub, 1.6));
 		p.drawLine(plus - QPointF(4, 0), plus + QPointF(4, 0));
@@ -1557,7 +1610,11 @@ void FlowCanvas::paintPorts(
 void FlowCanvas::paintEvent(QPaintEvent *e) {
 	auto p = QPainter(this);
 	auto hq = PainterHighQualityEnabler(p);
-	p.fillRect(e->rect(), st::botStudioCanvasBg);
+	if (Glass()) {
+		PaintCanvasBackdrop(p, rect());
+	} else {
+		p.fillRect(e->rect(), st::botStudioCanvasBg);
+	}
 
 	// Dotted grid that moves with the view.
 	const auto step = 22. * _zoom;
@@ -1630,7 +1687,7 @@ void FlowCanvas::paintEvent(QPaintEvent *e) {
 			continue;
 		}
 		p.setPen(QPen(accent, 1.5));
-		p.setBrush(st::botStudioCardBg);
+		p.setBrush(SolidFill(st::botStudioCardBg));
 		p.drawEllipse(link.middle, 11., 11.);
 		p.setPen(QPen(accent, 1.8, Qt::SolidLine, Qt::RoundCap));
 		p.drawLine(link.middle + QPointF(-4, -4), link.middle + QPointF(4, 4));
@@ -2301,9 +2358,13 @@ void NodePicker::paintEvent(QPaintEvent *e) {
 	auto p = QPainter(this);
 	auto hq = PainterHighQualityEnabler(p);
 	const auto r = QRectF(rect()).marginsRemoved({ 1., 1., 1., 1. });
-	p.setPen(QPen(WithAlpha(st::botStudioCardBorder->c, 160), 1));
-	p.setBrush(st::botStudioCardBg);
-	p.drawRoundedRect(r, 14, 14);
+	if (Glass()) {
+		PaintGlassCard(p, this, r, 14);
+	} else {
+		p.setPen(QPen(WithAlpha(st::botStudioCardBorder->c, 160), 1));
+		p.setBrush(st::botStudioCardBg);
+		p.drawRoundedRect(r, 14, 14);
+	}
 
 	p.setClipRect(QRect(0, kListTop, width(), height() - kListTop - 6));
 	const auto titleFont = style::font(st::botStudioNodeTitleFont);
@@ -2330,7 +2391,7 @@ void NodePicker::paintEvent(QPaintEvent *e) {
 		const auto row = QRect(8, top + 2, width() - 16, kItemLine - 4);
 		if (line.item == _selected || i == _over) {
 			p.setPen(Qt::NoPen);
-			p.setBrush(st::windowBgOver);
+			p.setBrush(InnerHover(st::windowBgOver));
 			p.drawRoundedRect(row, 10, 10);
 		}
 		const auto tile = QRectF(row.x() + 8, row.y() + 7, 30, 30);
@@ -2421,7 +2482,11 @@ FlowEditor::FlowEditor(
 	_panelBorder->paintRequest(
 	) | rpl::on_next([=](QRect clip) {
 		auto p = QPainter(_panelBorder);
-		p.fillRect(clip, st::shadowFg);
+		if (Glass()) {
+			p.fillRect(clip, AgentUi::EdgeColor());
+		} else {
+			p.fillRect(clip, st::shadowFg);
+		}
 	}, _panelBorder->lifetime());
 	_state->flow = PrepareFlow(_studio->flow(_botId));
 	_committed = _state->flow;
@@ -2471,7 +2536,12 @@ FlowEditor::FlowEditor(
 	_inspectorScroll->paintRequest(
 	) | rpl::on_next([=](QRect clip) {
 		auto p = QPainter(_inspectorScroll);
-		p.fillRect(clip, st::botStudioInspectorBg);
+		AgentUi::FillSurface(
+			p,
+			_inspectorScroll,
+			clip,
+			st::botStudioInspectorBg,
+			AgentUi::Surface::Panel);
 	}, _inspectorScroll->lifetime());
 	_panelClose->setClickedCallback([=] {
 		_state->selected = QString();
@@ -2499,6 +2569,11 @@ void FlowEditor::setupToolbar() {
 	_products->setClickedCallback([=] { showProducts(); });
 	_save->setClickedCallback([=] { save(); });
 	updateUndoButtons();
+	// The disabled color is taken from the palette, follow theme switches.
+	style::PaletteChanged(
+	) | rpl::on_next([=] {
+		updateUndoButtons();
+	}, lifetime());
 }
 
 void FlowEditor::setupZoomBar() {
@@ -2527,9 +2602,13 @@ void FlowEditor::setupZoomBar() {
 	) | rpl::on_next([=] {
 		auto p = QPainter(_zoomBar);
 		auto hq = PainterHighQualityEnabler(p);
+		const auto r = QRectF(_zoomBar->rect()).marginsRemoved({ .5, .5, .5, .5 });
+		if (Glass()) {
+			PaintGlassCard(p, _zoomBar, r, r.height() / 2.);
+			return;
+		}
 		p.setPen(QPen(WithAlpha(st::botStudioCardBorder->c, 120), 1));
 		p.setBrush(st::botStudioCardBg);
-		const auto r = QRectF(_zoomBar->rect()).marginsRemoved({ .5, .5, .5, .5 });
 		p.drawRoundedRect(r, r.height() / 2., r.height() / 2.);
 	}, _zoomBar->lifetime());
 	_zoomButtons = { out, _zoomLabel, in, fit, arrange };

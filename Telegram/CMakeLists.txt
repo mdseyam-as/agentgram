@@ -2478,6 +2478,7 @@ if (LINUX)
         bot_studio/bot_studio_flow.h
         bot_studio/bot_studio_flow_editor.cpp
         bot_studio/bot_studio_flow_editor.h
+        bot_studio/bot_studio_glass.h
         bot_studio/bot_studio_manager.cpp
         bot_studio/bot_studio_manager.h
         bot_studio/bot_studio_runtime.cpp

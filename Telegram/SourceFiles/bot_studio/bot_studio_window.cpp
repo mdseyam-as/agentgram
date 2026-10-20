@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/event_filter.h"
 #include "bot_studio/bot_studio_flow.h"
 #include "bot_studio/bot_studio_flow_editor.h"
+#include "bot_studio/bot_studio_glass.h"
 #include "bot_studio/bot_studio_manager.h"
 #include "main/main_session.h"
 #include "ui/abstract_button.h"
@@ -280,7 +281,7 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 QAbstractScrollArea::corner { background: transparent; }
 )"_q.arg(idle.name(QColor::HexArgb), hover.name(QColor::HexArgb)));
 		auto palette = result->palette();
-		palette.setColor(QPalette::Base, st::botStudioEditorBg->c);
+		palette.setColor(QPalette::Base, InnerFill(st::botStudioEditorBg));
 		palette.setColor(QPalette::Text, st::windowFg->c);
 		palette.setColor(QPalette::Highlight, st::windowBgActive->c);
 		palette.setColor(QPalette::HighlightedText, st::windowFgActive->c);
@@ -291,7 +292,9 @@ QAbstractScrollArea::corner { background: transparent; }
 		}
 	};
 	updatePalette();
-	style::PaletteChanged(
+	rpl::merge(
+		style::PaletteChanged(),
+		AgentUi::DesignValue() | rpl::skip(1) | rpl::to_empty
 	) | rpl::on_next(updatePalette, Ui::CreateChild<Ui::RpWidget>(
 		result)->lifetime());
 	return result;
@@ -411,9 +414,18 @@ protected:
 		auto p = QPainter(this);
 		auto hq = PainterHighQualityEnabler(p);
 		p.setPen(Qt::NoPen);
-		p.setBrush(st::botStudioPillBg);
+		p.setBrush(InnerFill(st::botStudioPillBg));
 		const auto radius = height() / 2.;
-		p.drawRoundedRect(rect(), radius, radius);
+		if (Glass()) {
+			p.setPen(QPen(AgentUi::FieldEdge(), 1.));
+			const auto half = QMarginsF(.5, .5, .5, .5);
+			p.drawRoundedRect(
+				QRectF(rect()).marginsRemoved(half),
+				radius - .5,
+				radius - .5);
+		} else {
+			p.drawRoundedRect(rect(), radius, radius);
+		}
 		p.setFont(st::botStudioPillFont);
 		for (auto i = 0; i != int(_rects.size()); ++i) {
 			const auto r = _rects[i];
@@ -426,7 +438,7 @@ protected:
 			} else {
 				if (i == _over) {
 					p.setPen(Qt::NoPen);
-					p.setBrush(st::windowBgRipple);
+					p.setBrush(InnerHover(st::windowBgRipple));
 					p.drawRoundedRect(r, inner, inner);
 				}
 				p.setPen(st::windowSubTextFg);
@@ -498,12 +510,15 @@ protected:
 		auto hq = PainterHighQualityEnabler(p);
 		const auto r = rect().marginsRemoved({ 1, 1, 1, 1 });
 		const auto radius = st::botStudioCardRadius;
-		p.setBrush(isOver() ? st::windowBgOver : st::botStudioCardBg);
+		p.setBrush(isOver()
+			? InnerHover(st::windowBgOver)
+			: InnerFill(st::botStudioCardBg));
 		auto border = _selected
 			? st::windowBgActive->c
 			: st::botStudioCardBorder->c;
 		if (!_selected) {
 			border.setAlpha(140);
+			border = InnerEdge(border);
 		}
 		p.setPen(QPen(border, _selected ? 2 : 1));
 		p.drawRoundedRect(r, radius, radius);
@@ -776,8 +791,8 @@ protected:
 		if (selected || isOver()) {
 			p.setPen(Qt::NoPen);
 			p.setBrush(selected
-				? st::botStudioRowBgActive
-				: st::botStudioRowBgOver);
+				? st::botStudioRowBgActive->c
+				: InnerHover(st::botStudioRowBgOver));
 			p.drawRoundedRect(
 				rect(),
 				st::botStudioRowRadius,
@@ -797,7 +812,8 @@ protected:
 		const auto dot = st::botStudioStatusDot + 4;
 		p.setPen(QPen(selected
 			? st::botStudioRowBgActive->c
-			: st::botStudioSidebarBg->c, 2));
+			: SolidFill(st::botStudioSidebarBg, AgentUi::Surface::Folders),
+			2));
 		p.setBrush(StatusColor(status));
 		p.drawEllipse(QRect(
 			avatar.x() + avatar.width() - dot + 1,
@@ -1185,7 +1201,7 @@ void BotPage::setupAiBar() {
 		auto p = QPainter(_aiBar);
 		auto hq = PainterHighQualityEnabler(p);
 		p.setPen(QPen(st::windowBgActive->c, 1.5));
-		p.setBrush(st::aiAgentComposerBg);
+		p.setBrush(InnerFill(st::aiAgentComposerBg));
 		p.drawRoundedRect(
 			QRectF(_aiBar->rect()).marginsRemoved({ 1., 1., 1., 1. }),
 			st::botStudioAiBarRadius,
@@ -1381,8 +1397,10 @@ void BotPage::setupAudience() {
 		const auto labelFont = style::font(st::botStudioRowStatusFont);
 		for (auto i = 0; i != count; ++i) {
 			const auto r = QRect(i * (width + skip), 0, width, height);
-			p.setPen(Qt::NoPen);
-			p.setBrush(st::botStudioEditorBg);
+			p.setPen(Glass()
+				? QPen(AgentUi::FieldEdge(), 1.)
+				: QPen(Qt::NoPen));
+			p.setBrush(InnerFill(st::botStudioEditorBg));
 			p.drawRoundedRect(r, st::botStudioCardRadius, st::botStudioCardRadius);
 			p.setFont(numberFont);
 			p.setPen(st::windowBoldFg);
@@ -1421,10 +1439,11 @@ void BotPage::setupAudience() {
 		&QWidget::customContextMenuRequested,
 		[=](QPoint point) { showOrderMenu(_leadsTable->rowAt(point.y())); });
 	const auto updatePalette = [=] {
-		const auto bg = st::botStudioEditorBg->c.name();
+		const auto bg = InnerFill(st::botStudioEditorBg).name(
+			QColor::HexArgb);
 		const auto fg = st::windowFg->c.name();
 		const auto sub = st::windowSubTextFg->c.name();
-		const auto line = st::windowBg->c.name();
+		const auto line = InnerEdge(st::windowBg->c).name(QColor::HexArgb);
 		const auto active = st::windowBgActive->c.name();
 		_leadsTable->setStyleSheet(uR"(
 QTableWidget { background: %1; color: %2; border-radius: 10px; gridline-color: %4; }
@@ -1436,10 +1455,15 @@ QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
 QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
 QScrollBar::handle { background: %3; border-radius: 3px; min-height: 30px; min-width: 30px; }
 QScrollBar::add-line, QScrollBar::sub-line { width: 0px; height: 0px; }
-)"_q.arg(bg, fg, sub, line, active));
+)"_q.arg(bg, fg, sub, line, active) + (Glass()
+			// Translucent sections show the header itself under them.
+			? u"QHeaderView { background: transparent; }"_q
+			: QString()));
 	};
 	updatePalette();
-	style::PaletteChanged(
+	rpl::merge(
+		style::PaletteChanged(),
+		AgentUi::DesignValue() | rpl::skip(1) | rpl::to_empty
 	) | rpl::on_next(updatePalette, _leadsTitle->lifetime());
 }
 
@@ -2073,7 +2097,7 @@ EmptyPage::EmptyPage(
 		auto p = QPainter(_aiBar);
 		auto hq = PainterHighQualityEnabler(p);
 		p.setPen(QPen(st::windowBgActive->c, 1.5));
-		p.setBrush(st::aiAgentComposerBg);
+		p.setBrush(InnerFill(st::aiAgentComposerBg));
 		p.drawRoundedRect(
 			QRectF(_aiBar->rect()).marginsRemoved({ 1., 1., 1., 1. }),
 			st::botStudioAiBarRadius,
@@ -2196,6 +2220,12 @@ StudioWidget::StudioWidget(
 , _newBot(MakeButton(this, u"＋ Новый бот"_q, st::botStudioNewButton))
 , _scroll(Ui::CreateChild<Ui::ScrollArea>(this, st::defaultSolidScroll))
 , _list(_scroll->setOwnedWidget(object_ptr<Ui::VerticalLayout>(_scroll))) {
+	// Inside the window the plain background turns transparent, so the
+	// glass painted here shows through the pages.
+	AgentUi::RegisterGlassRoot(
+		this,
+		AgentUi::Surface::Panel,
+		AgentUi::GlassLevel::Panel);
 	_newBot->setClickedCallback([=] { createBot(); });
 	_studio->botsChanged(
 	) | rpl::on_next([=] {
@@ -2299,9 +2329,30 @@ void StudioWidget::showPage(bool force) {
 
 void StudioWidget::paintEvent(QPaintEvent *e) {
 	auto p = QPainter(this);
-	p.fillRect(
-		QRect(0, 0, st::botStudioSidebarWidth, height()),
-		st::botStudioSidebarBg);
+	const auto sidebar = QRect(0, 0, st::botStudioSidebarWidth, height());
+	if (Glass()) {
+		const auto clip = e->rect();
+		const auto content = QRect(
+			sidebar.width(),
+			0,
+			width() - sidebar.width(),
+			height());
+		AgentUi::PaintGlass(
+			p,
+			this,
+			clip.intersected(sidebar),
+			AgentUi::Surface::Folders);
+		AgentUi::PaintGlass(
+			p,
+			this,
+			clip.intersected(content),
+			AgentUi::Surface::Panel);
+		p.fillRect(
+			QRect(sidebar.width() - 1, 0, 1, height()),
+			AgentUi::EdgeColor());
+	} else {
+		p.fillRect(sidebar, st::botStudioSidebarBg);
+	}
 	auto hq = PainterHighQualityEnabler(p);
 	const auto &padding = st::botStudioSidebarPadding;
 	const auto size = st::botStudioLogoSize;
@@ -2380,6 +2431,14 @@ void ShowWindow(
 		window->setWindowTitle(u"Agentgram — Bot Studio"_q);
 		window->setMinimumSize(st::botStudioWindowMinSize);
 		window->setAttribute(Qt::WA_DeleteOnClose, false);
+		// Widgets read colors at paint, so a theme or design switch needs
+		// this window repainted as a whole, not only the main one.
+		rpl::merge(
+			style::PaletteChanged(),
+			AgentUi::DesignValue() | rpl::skip(1) | rpl::to_empty
+		) | rpl::on_next([=] {
+			Ui::ForceFullRepaint(window);
+		}, window->lifetime());
 		state->layers = std::make_unique<Ui::LayerManager>(window->body());
 		const auto widget = Ui::CreateChild<StudioWidget>(
 			window->body().get(),
